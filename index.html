@@ -2013,7 +2013,28 @@
     window.__SB_DATA_DI_SERVER = false;
 
     const _origSetItem = Storage.prototype.setItem;
-    const lsSet = (k, v) => _origSetItem.call(localStorage, k, v);
+    const _origGetItem = Storage.prototype.getItem;
+    const _origRemoveItem = Storage.prototype.removeItem;
+
+    // Data bersama (SHARED_KEYS) bisa lebih dari 5 MB, melebihi kuota localStorage.
+    // Server adalah sumber data utama, jadi data bersama disimpan di memori (bukan localStorage).
+    const memShared = new Map();
+    const lsSet = (k, v) => {
+        if (SHARED_KEYS.includes(k)) {
+            memShared.set(k, String(v));
+            try { _origRemoveItem.call(localStorage, k); } catch (e) {}   // bebaskan kuota dari cache lama
+        } else {
+            _origSetItem.call(localStorage, k, v);
+        }
+    };
+    Storage.prototype.getItem = function (key) {
+        if (this === localStorage && memShared.has(key)) return memShared.get(key);
+        return _origGetItem.call(this, key);
+    };
+    Storage.prototype.removeItem = function (key) {
+        if (this === localStorage) memShared.delete(key);
+        return _origRemoveItem.call(this, key);
+    };
 
     // ---------- util UI ----------
     function sbToast(msg, isError) {
@@ -2179,7 +2200,8 @@
     }
 
     Storage.prototype.setItem = function (key, value) {
-        _origSetItem.call(this, key, value);
+        if (this === localStorage && SHARED_KEYS.includes(key)) lsSet(key, value);
+        else _origSetItem.call(this, key, value);
         if (this !== localStorage || applyingRemote || !SHARED_KEYS.includes(key) || !bolehTulis(key)) return;
         if (lastSynced[key] === String(value)) return;
         clearTimeout(timers[key]);
