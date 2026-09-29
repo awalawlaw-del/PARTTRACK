@@ -548,8 +548,7 @@
             #content { margin-left:0 !important; padding:68px 12px 20px !important; }
             #content > .d-flex.border-bottom { flex-direction:column; align-items:stretch !important; gap:12px; padding:14px !important; }
             #content > .d-flex.border-bottom > .d-flex { justify-content:flex-start; flex-wrap:wrap; }
-            #headerTitle { font-size:1.15rem !important; }
-            #subHeaderInfo { font-size:.75rem; }
+            #headerTitle, #subHeaderInfo { display:none !important; }
             .card-body { padding:14px; }
             .table-responsive { -webkit-overflow-scrolling:touch; }
         }
@@ -1077,12 +1076,6 @@
                     <div class="card shadow-sm border-0 mb-4 border-start border-success border-4">
                         <div class="card-header bg-white text-dark py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
                             <h5 class="mb-0 fw-bold"><i class="fas fa-camera text-success me-2"></i>Driver Portal (Armada Astra) - Input Surat Jalan & Ambil Foto Kamera (POD)</h5>
-                            <div class="d-flex gap-2 align-items-center flex-wrap">
-                                <input type="date" id="driverStart" class="form-control form-control-sm" style="width: 130px;" onchange="muatTabelDriverPOD()">
-                                <span class="small text-muted">-</span>
-                                <input type="date" id="driverEnd" class="form-control form-control-sm" style="width: 130px;" onchange="muatTabelDriverPOD()">
-                                <button class="btn btn-sm btn-outline-danger" onclick="hapusFilterTanggal('driverStart', 'driverEnd'); muatTabelDriverPOD();"><i class="fas fa-times me-1"></i>Hapus Tgl</button>
-                            </div>
                         </div>
                         <div class="card-body p-4">
                             <form id="formDriverPOD">
