@@ -1033,11 +1033,6 @@
                     <div class="card shadow-sm border-0 mt-2">
                         <div class="card-header bg-white text-dark py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
                             <h5 class="mb-0 fw-bold"><i class="fas fa-file-alt text-primary me-2"></i>Laporan Pengiriman <span id="labelDealerSub" class="text-warning small"></span></h5>
-                            <div class="d-flex gap-2 align-items-center flex-wrap">
-                                <input type="date" id="exportStart" class="form-control form-control-sm" style="width: 130px;">
-                                <input type="date" id="exportEnd" class="form-control form-control-sm" style="width: 130px;">
-                                <button class="btn btn-success btn-sm fw-bold text-nowrap shadow-sm" onclick="eksporKeExcel()"><i class="fas fa-file-excel me-1"></i> Ekspor</button>
-                            </div>
                         </div>
                         <div class="card-body">
                             <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
@@ -1046,6 +1041,7 @@
                                 <span class="small text-muted">s/d</span>
                                 <input type="date" id="laporanEnd" class="form-control form-control-sm" style="width: 140px;" onchange="filterLaporanTanggal()">
                                 <button class="btn btn-sm btn-outline-danger py-1" onclick="hapusFilterTanggal('laporanStart', 'laporanEnd'); filterLaporanTanggal()"><i class="fas fa-times me-1"></i>Hapus Tgl</button>
+                                <button class="btn btn-success btn-sm fw-bold text-nowrap shadow-sm ms-md-2" onclick="eksporKeExcel()" title="Ekspor sesuai Tgl Kirim dan pencarian yang sedang tampil"><i class="fas fa-file-excel me-1"></i> Ekspor</button>
                             </div>
                             <div class="row mb-3">
                                 <div class="col-md-4">
@@ -1562,7 +1558,7 @@
                         <div class="card-body p-4">
                             <div class="row g-4">
                                 <div class="col-12"><div class="card border shadow-sm p-3"><div style="height: 380px;"><canvas id="chartLeadTime"></canvas></div></div></div>
-                                <div class="col-xl-6"><div class="card border shadow-sm p-3"><div style="height: 300px;"><canvas id="chartKoli"></canvas></div></div></div>
+                                <div class="col-12"><div class="card border shadow-sm p-3"><div style="height: 380px;"><canvas id="chartKoli"></canvas></div></div></div>
                             </div>
                         </div>
                     </div>
@@ -3464,8 +3460,6 @@
         });
 
         let todayStr = new Date().toISOString().split('T')[0];
-        document.getElementById('exportStart').value = todayStr;
-        document.getElementById('exportEnd').value = todayStr;
         document.getElementById('filterStart').value = todayStr;
         document.getElementById('filterEnd').value = todayStr;
 
@@ -6941,28 +6935,97 @@
             let ctxKoli = document.getElementById('chartKoli');
             if (ctxKoli) {
                 if (chartKoliInstance) chartKoliInstance.destroy();
+                const koliTgl = {};
+                filtered.forEach(item => {
+                    const t = cleanDateOnly(item.tgl_kirim || item.tgl_kirim_raw);
+                    if (!t) return;
+                    koliTgl[t] = (koliTgl[t] || 0) + (parseInt(item.total) || 0);
+                });
+                const tglK = Object.keys(koliTgl).sort();
+                const nilaiK = tglK.map(t => koliTgl[t]);
+                const rataK = nilaiK.length ? +(nilaiK.reduce((a, b) => a + b, 0) / nilaiK.length).toFixed(1) : 0;
+                const arahK = nilaiK.map((v, i) => i === 0 ? '' : (v > nilaiK[i - 1] ? 'naik' : (v < nilaiK[i - 1] ? 'turun' : '')));
+                const emojiOk = ch => {
+                    try {
+                        const mk = t => { const c = document.createElement('canvas'); c.width = 28; c.height = 28; const x = c.getContext('2d'); x.font = '22px sans-serif'; x.textBaseline = 'top'; x.fillText(t, 0, 0); return c.toDataURL(); };
+                        return mk(ch) !== mk('\uDBFF\uDFFE');
+                    } catch (e) { return true; }
+                };
+                const ikonNaik = '\uD83C\uDFD4\uFE0F';
+                const ikonTurun = emojiOk('\uD83D\uDEDD') ? '\uD83D\uDEDD' : '\uD83D\uDCC9';
+                const warnaK = a => a === 'naik' ? '#059669' : a === 'turun' ? '#8b5cf6' : '#10b981';
+                const tandaKoli = {
+                    id: 'tandaKoli',
+                    afterDatasetsDraw(chart) {
+                        const meta = chart.getDatasetMeta(0);
+                        const c = chart.ctx;
+                        c.save(); c.textAlign = 'center';
+                        nilaiK.forEach((v, i) => {
+                            const pt = meta.data[i]; if (!pt || !tglK.length) return;
+                            c.font = '600 11px sans-serif'; c.fillStyle = '#334155';
+                            c.fillText(v, pt.x, pt.y - (arahK[i] ? 30 : 12));
+                            if (arahK[i]) {
+                                c.font = '20px sans-serif'; c.fillText(arahK[i] === 'naik' ? ikonNaik : ikonTurun, pt.x, pt.y - 11);
+                            }
+                        });
+                        c.restore();
+                    }
+                };
                 chartKoliInstance = new Chart(ctxKoli, {
-                    type: 'bar',
+                    type: 'line',
                     data: {
-                        labels: labels.length > 0 ? labels : ['Tidak Ada Data'],
+                        labels: tglK.length ? tglK.map(t => formatDateToDisplay(t)) : ['Tidak Ada Data'],
                         datasets: [{
-                            label: 'Total Koli Dikirim',
-                            data: labels.length > 0 ? koliValues : [0],
-                            backgroundColor: 'rgba(67, 97, 238, 0.7)',
-                            borderColor: '#4361ee',
-                            borderWidth: 1
+                            label: 'Total koli / dus terkirim',
+                            data: tglK.length ? nilaiK : [0],
+                            borderColor: '#10b981',
+                            borderWidth: 3,
+                            tension: 0.35,
+                            fill: true,
+                            backgroundColor: (ctx) => {
+                                const a = ctx.chart.chartArea; if (!a) return 'rgba(16,185,129,0.1)';
+                                const g = ctx.chart.ctx.createLinearGradient(0, a.top, 0, a.bottom);
+                                g.addColorStop(0, 'rgba(16,185,129,0.30)'); g.addColorStop(1, 'rgba(16,185,129,0.02)');
+                                return g;
+                            },
+                            pointRadius: arahK.map(a => a ? 7 : 5),
+                            pointHoverRadius: 9,
+                            pointBackgroundColor: arahK.map(a => a ? warnaK(a) : '#ffffff'),
+                            pointBorderColor: arahK.map(a => warnaK(a)),
+                            pointBorderWidth: 3
+                        }, {
+                            label: 'Rata-rata periode (' + rataK + ' koli)',
+                            data: tglK.length ? nilaiK.map(() => rataK) : [0],
+                            borderColor: '#94a3b8', borderDash: [6, 6], borderWidth: 1.5,
+                            pointRadius: 0, pointHoverRadius: 0, fill: false
                         }]
                     },
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
+                        layout: { padding: { top: 34, right: 12 } },
+                        interaction: { mode: 'index', intersect: false },
                         plugins: {
-                            title: { display: true, text: 'Total Koli Pengiriman per Driver' }
+                            title: { display: true, text: 'Tren Total Koli Terkirim per Tanggal Kirim', font: { size: 15 } },
+                            subtitle: { display: true, text: ikonNaik + ' = lebih banyak dari hari sebelumnya   |   ' + ikonTurun + ' = lebih sedikit dari hari sebelumnya', padding: { bottom: 8 } },
+                            legend: { position: 'bottom', labels: { usePointStyle: true } },
+                            tooltip: {
+                                callbacks: {
+                                    label: c => c.datasetIndex === 0 ? ' Total: ' + c.parsed.y + ' koli' : ' ' + c.dataset.label,
+                                    afterLabel: c => {
+                                        if (c.datasetIndex !== 0 || c.dataIndex === 0) return '';
+                                        const d = nilaiK[c.dataIndex] - nilaiK[c.dataIndex - 1];
+                                        return (d > 0 ? '+' : '') + d + ' koli dari tanggal sebelumnya';
+                                    }
+                                }
+                            }
                         },
                         scales: {
-                            y: { beginAtZero: true }
+                            x: { grid: { display: false } },
+                            y: { beginAtZero: true, grace: '15%', grid: { color: 'rgba(148,163,184,0.25)' }, title: { display: true, text: 'Dus / Koli' } }
                         }
-                    }
+                    },
+                    plugins: [tandaKoli]
                 });
             }
         }
