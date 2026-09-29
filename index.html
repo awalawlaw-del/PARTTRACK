@@ -2246,6 +2246,7 @@
         sbFlush();
         try { await sb.auth.signOut(); } catch (e) {}
         hapusSesiLokal();
+        await idbHapusSemua();   // hapus cache data di perangkat ini
         // Hapus cache data bersama dari perangkat ini, KECUALI belum ada data di server (menghindari kehilangan data lama)
         if (window.__SB_DATA_DI_SERVER) SHARED_KEYS.forEach(k => localStorage.removeItem(k));
         location.reload();
@@ -2253,6 +2254,7 @@
     async function sbKeluarPaksa() {
         try { await sb.auth.signOut(); } catch (e) {}
         hapusSesiLokal();
+        await idbHapusSemua();
         location.reload();
     }
 
@@ -2347,13 +2349,35 @@
         alert(gagal.length ? `Migrasi selesai sebagian: ${ok} data terupload.\nGagal: ${gagal.join(', ')}` : `Migrasi selesai: ${ok} data berhasil diupload ke server.`);
     };
 
+    // ---------- cache lokal (IndexedDB): data besar hanya diunduh ulang bila berubah di server ----------
+    let _idbP = null;
+    function idb() {
+        if (_idbP) return _idbP;
+        _idbP = new Promise((res, rej) => {
+            if (!window.indexedDB) return rej(new Error('IndexedDB tidak tersedia'));
+            const r = indexedDB.open('parttrack_cache', 1);
+            r.onupgradeneeded = () => r.result.createObjectStore('kv');
+            r.onsuccess = () => res(r.result);
+            r.onerror = () => rej(r.error);
+        });
+        return _idbP;
+    }
+    async function idbGet(k) {
+        try { const db = await idb(); return await new Promise(res => { const q = db.transaction('kv').objectStore('kv').get(k); q.onsuccess = () => res(q.result); q.onerror = () => res(undefined); }); }
+        catch (e) { return undefined; }
+    }
+    async function idbSet(k, v) {
+        try { const db = await idb(); await new Promise(res => { const t = db.transaction('kv', 'readwrite'); t.objectStore('kv').put(v, k); t.oncomplete = t.onerror = t.onabort = () => res(); }); } catch (e) {}
+    }
+    async function idbHapusSemua() {
+        try { const db = await idb(); await new Promise(res => { const t = db.transaction('kv', 'readwrite'); t.objectStore('kv').clear(); t.oncomplete = t.onerror = t.onabort = () => res(); }); } catch (e) {}
+    }
+
     async function muatDataDariServer() {
-        // Unduh tiap key secara paralel (lebih cepat daripada satu permintaan besar)
-        const hasil = await Promise.all(SHARED_KEYS.map(k => sb.from('app_store').select('key,value').eq('key', k).maybeSingle()));
-        const gagal = hasil.find(h => h.error);
-        if (gagal) throw gagal.error;
-        const data = hasil.map(h => h.data).filter(Boolean);
-        if (!data.length) {
+        // 1) ambil daftar key + waktu update terakhir (ringan)
+        const { data: meta, error: em } = await sb.from('app_store').select('key,updated_at');
+        if (em) throw em;
+        if (!meta.length) {
             const adaLokal = SHARED_KEYS.some(k => localStorage.getItem(k) !== null);
             if (window.__SB_PROFILE.role === 'admin' && adaLokal &&
                 confirm('Database server masih kosong, tetapi browser ini menyimpan data lama.\n\nUpload data lama ke server sekarang?\n(Data ini akan dipakai bersama oleh semua pengguna.)')) {
@@ -2362,12 +2386,26 @@
             return;
         }
         window.__SB_DATA_DI_SERVER = true;
+        const uid = window.__SB_PROFILE.id;
+        const versi = {};
+        meta.forEach(m => { versi[m.key] = m.updated_at; });
+
+        // 2) per key: pakai cache bila versinya sama, kalau tidak unduh (paralel)
+        const hasil = await Promise.all(SHARED_KEYS.filter(k => k in versi).map(async k => {
+            const c = await idbGet(uid + ':' + k);
+            if (c && c.u === versi[k] && typeof c.s === 'string') return { key: k, s: c.s };
+            const r = await sb.from('app_store').select('value').eq('key', k).maybeSingle();
+            if (r.error) throw r.error;
+            if (!r.data) return null;
+            const s = JSON.stringify(r.data.value);
+            idbSet(uid + ':' + k, { u: versi[k], s });
+            return { key: k, s };
+        }));
+
         const ada = new Set();
-        data.forEach(r => {
-            if (!SHARED_KEYS.includes(r.key)) return;
-            ada.add(r.key);
-            const s = JSON.stringify(r.value);
-            lsSet(r.key, s); lastSynced[r.key] = s;
+        hasil.filter(Boolean).forEach(h => {
+            ada.add(h.key);
+            lsSet(h.key, h.s); lastSynced[h.key] = h.s;
         });
         SHARED_KEYS.forEach(k => { if (!ada.has(k)) localStorage.removeItem(k); });
     }
