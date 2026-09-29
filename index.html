@@ -523,6 +523,14 @@
         .lap-ai-item .t { font-weight:700; color:#0f172a; font-size:.9rem; }
         .lap-ai-item .d { color:#475569; font-size:.85rem; line-height:1.55; }
         .lap-ai-foot { padding:10px 18px; background:#f8fafc; color:#94a3b8; font-size:.72rem; }
+            /* HP: tombol Keluar Akun tetap terlihat (ikon saja) di bawah sidebar */
+        @media (max-width:768px) {
+            #sidebar > .p-3.border-top { display:block !important; padding:8px 6px !important; }
+            #sidebar > .p-3.border-top .user-chip { display:none !important; }
+            #sidebar > .p-3.border-top .btn { padding:10px 0; }
+            #sidebar > .p-3.border-top .btn .logout-text { display:none; }
+            #sidebar > .p-3.border-top .btn i { margin:0 !important; font-size:1.2rem; }
+        }
     </style>
 
 </head>
@@ -734,7 +742,7 @@
                 <div class="user-chip"><div class="user-avatar" id="userAvatar">A</div><div class="user-meta"><div class="user-name" id="userNameText">-</div><div class="user-role" id="userRoleText">-</div></div></div>
                 <span class="badge bg-primary mb-2 d-block py-2" id="userRoleBadge">Role: Admin</span>
                 <button class="btn btn-outline-light btn-sm w-100 fw-bold border-opacity-25" onclick="logoutSistem()">
-                    <i class="fas fa-sign-out-alt me-1"></i> Keluar Akun
+                    <i class="fas fa-sign-out-alt me-1"></i><span class="logout-text"> Keluar Akun</span>
                 </button>
             </div>
         </div>
