@@ -207,6 +207,11 @@
         }
         .table tbody tr { transition: background .15s ease, transform .15s ease; }
         .table tbody tr:hover { background: #eef4ff !important; }
+        /* Judul kolom tabel dibekukan saat tabel di-scroll */
+        .table-responsive { max-height: 70vh; overflow-y: auto; }
+        .table-responsive .table thead { position: sticky; top: 0; z-index: 5; }
+        .table-responsive .table thead th { position: static; }
+        .table-responsive .table thead:not(.table-dark):not(.table-light) th { background: #f1f5f9; }
         .btn {
             border-radius: 9px;
             transition: transform .15s ease, box-shadow .15s ease;
@@ -841,10 +846,10 @@
                     <div class="row g-3 mb-3">
                         <div class="col-md-12 d-flex align-items-center gap-2 flex-wrap bg-white p-2 rounded shadow-sm">
                             <span class="fw-bold small text-secondary me-1"><i class="fas fa-calendar-alt text-primary me-1"></i> Filter Tanggal:</span>
-                            <input type="date" id="keluarStart" class="form-control form-control-sm" style="width: 140px;">
+                            <input type="date" id="keluarStart" class="form-control form-control-sm" style="width: 140px;" onchange="updateStatistikUI()">
                             <span class="small text-muted">s/d</span>
-                            <input type="date" id="keluarEnd" class="form-control form-control-sm" style="width: 140px;">
-                            <button class="btn btn-sm btn-outline-danger py-1" onclick="hapusFilterTanggal('keluarStart', 'keluarEnd')"><i class="fas fa-times me-1"></i>Hapus Tgl</button>
+                            <input type="date" id="keluarEnd" class="form-control form-control-sm" style="width: 140px;" onchange="updateStatistikUI()">
+                            <button class="btn btn-sm btn-outline-danger py-1" onclick="hapusFilterTanggal('keluarStart', 'keluarEnd'); updateStatistikUI()"><i class="fas fa-times me-1"></i>Hapus Tgl</button>
                         </div>
                     </div>
 
@@ -6128,11 +6133,24 @@
             const elBK = document.getElementById('statBelumKembali');
             const elDP = document.getElementById('statDalamPengantaran');
 
-            if (elSJ) elSJ.innerText = totalSJ;
-            if (elRace) elRace.innerText = hitungTotalRaceUnique();
-            if (elDO) elDO.innerText = totalDO;
-            if (elBK) elBK.innerText = belumKembali;
-            if (elDP) elDP.innerText = transaksiData.filter(isDalamPengantaran).length;
+            // Kartu di menu Surat Jalan Keluar mengikuti Filter Tanggal (tanggal kirim); kosong = semua data
+            const fs = (document.getElementById('keluarStart') || {}).value || '';
+            const fe = (document.getElementById('keluarEnd') || {}).value || '';
+            const tampil = transaksiData.filter(item => {
+                if (!fs && !fe) return true;
+                const t = cleanDateOnly(item.tgl_kirim || item.tgl_kirim_raw);
+                if (fs && t < fs) return false;
+                if (fe && t > fe) return false;
+                return true;
+            });
+            const raceSet = new Set();
+            tampil.forEach(item => raceSet.add(`${item.tgl_kirim_raw}_${item.driver}_${item.race}`));
+
+            if (elSJ) elSJ.innerText = tampil.length;
+            if (elRace) elRace.innerText = raceSet.size;
+            if (elDO) elDO.innerText = tampil.reduce((sum, item) => sum + (parseInt(item.total) || 0), 0);
+            if (elBK) elBK.innerText = tampil.filter(item => !isDokOK(item)).length;
+            if (elDP) elDP.innerText = tampil.filter(isDalamPengantaran).length;
         }
 
         // Initial render database viewer/status
@@ -6799,28 +6817,70 @@
             let ctxLead = document.getElementById('chartLeadTime');
             if (ctxLead) {
                 if (chartLeadTimeInstance) chartLeadTimeInstance.destroy();
+                const perTgl = {};
+                filtered.forEach(item => {
+                    const t = cleanDateOnly(item.tgl_kirim || item.tgl_kirim_raw);
+                    const lt = parseInt(item.leadTimeVal);
+                    if (!t || isNaN(lt)) return;
+                    if (!perTgl[t]) perTgl[t] = { sum: 0, n: 0 };
+                    perTgl[t].sum += lt; perTgl[t].n += 1;
+                });
+                const tglList = Object.keys(perTgl).sort();
+                const nilai = tglList.map(t => +(perTgl[t].sum / perTgl[t].n).toFixed(1));
+                // Tanda naik: lead time >= rata-rata (maks. 3 tanggal sebelumnya) + 1 hari
+                const pembanding = nilai.map((v, i) => {
+                    const prev = nilai.slice(Math.max(0, i - 3), i);
+                    if (!prev.length) return null;
+                    const avg = prev.reduce((a, b) => a + b, 0) / prev.length;
+                    return (v >= avg + 1 && v >= avg * 1.25) ? +avg.toFixed(1) : null;
+                });
+                const tandaWarning = {
+                    id: 'tandaWarning',
+                    afterDatasetsDraw(chart) {
+                        const meta = chart.getDatasetMeta(0);
+                        const c = chart.ctx;
+                        c.save(); c.font = 'bold 16px sans-serif'; c.textAlign = 'center';
+                        pembanding.forEach((b, i) => {
+                            if (b === null || !meta.data[i]) return;
+                            c.fillStyle = '#dc3545';
+                            c.fillText('\u26A0', meta.data[i].x, meta.data[i].y - 12);
+                        });
+                        c.restore();
+                    }
+                };
                 chartLeadTimeInstance = new Chart(ctxLead, {
-                    type: 'bar',
+                    type: 'line',
                     data: {
-                        labels: labels.length > 0 ? labels : ['Tidak Ada Data'],
+                        labels: tglList.length ? tglList.map(t => formatDateToDisplay(t)) : ['Tidak Ada Data'],
                         datasets: [{
                             label: 'Rata-Rata Lead Time (Hari)',
-                            data: labels.length > 0 ? avgLeadTimeValues : [0],
-                            backgroundColor: 'rgba(220, 53, 69, 0.7)',
-                            borderColor: '#dc3545',
-                            borderWidth: 1
+                            data: tglList.length ? nilai : [0],
+                            borderColor: '#4361ee',
+                            backgroundColor: 'rgba(67, 97, 238, 0.12)',
+                            tension: 0.3,
+                            fill: true,
+                            pointRadius: pembanding.map(b => b !== null ? 8 : 4),
+                            pointBackgroundColor: pembanding.map(b => b !== null ? '#dc3545' : '#4361ee'),
+                            pointBorderColor: pembanding.map(b => b !== null ? '#dc3545' : '#4361ee')
                         }]
                     },
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
                         plugins: {
-                            title: { display: true, text: 'Rata-Rata Lead Time Pengiriman per Driver' }
+                            title: { display: true, text: 'Tren Rata-Rata Lead Time per Tanggal  (\u26A0 merah = naik tajam dibanding 3 tanggal sebelumnya)' },
+                            tooltip: {
+                                callbacks: {
+                                    afterLabel: ctx => pembanding[ctx.dataIndex] !== null && pembanding[ctx.dataIndex] !== undefined
+                                        ? 'Naik tajam (rata-rata sebelumnya: ' + pembanding[ctx.dataIndex] + ' hari)' : ''
+                                }
+                            }
                         },
                         scales: {
-                            y: { beginAtZero: true }
+                            y: { beginAtZero: true, title: { display: true, text: 'Hari' } }
                         }
-                    }
+                    },
+                    plugins: [tandaWarning]
                 });
             }
 
