@@ -556,10 +556,40 @@
             .card-body { padding:14px; }
             .table-responsive { -webkit-overflow-scrolling:touch; }
         }
+        /* ===== LOGIN SOFT + LOADING ===== */
+        #loginWrapper { background:linear-gradient(135deg,#eef2ff 0%,#f5f3ff 45%,#fff7ed 100%) !important; }
+        #loginWrapper::before { display:none; }
+        #loginWrapper .login-orb { opacity:.32; }
+        #loginWrapper .login-orb.orb-2 { opacity:.22; }
+        #loginWrapper .card { background:rgba(255,255,255,.88); border:1px solid rgba(255,255,255,.9); border-radius:24px !important; box-shadow:0 24px 60px rgba(67,97,238,.14) !important; animation:cardIn .5s ease both; }
+        @keyframes cardIn { from { opacity:0; transform:translateY(14px) scale(.98); } to { opacity:1; transform:none; } }
+        #loginWrapper .form-control { border-radius:14px; border:1.5px solid #e6eaf3; background:#f8fafd; }
+        #loginWrapper .form-control:focus { box-shadow:0 0 0 4px rgba(67,97,238,.12); border-color:#6d83f2; }
+        #loginWrapper .btn-primary { background:linear-gradient(135deg,#6d83f2,#4361ee); border:0; border-radius:14px; box-shadow:0 10px 22px rgba(67,97,238,.28); transition:transform .2s, box-shadow .2s, opacity .2s; }
+        #loginWrapper .btn-primary:hover:not(:disabled) { transform:translateY(-1px); box-shadow:0 14px 28px rgba(67,97,238,.34); }
+        #loginWrapper .btn-primary:disabled { opacity:.85; cursor:progress; }
+        #bootSplash { display:none; position:fixed; inset:0; z-index:99998; align-items:center; justify-content:center; flex-direction:column; gap:18px; background:linear-gradient(135deg,#eef2ff 0%,#f5f3ff 45%,#fff7ed 100%); color:#475569; }
+        #bootSplash.show { display:flex; animation:splashIn .25s ease both; }
+        @keyframes splashIn { from { opacity:0; } to { opacity:1; } }
+        #bootSplash img { width:170px; max-width:60vw; }
+        #bootSplash .ring { width:46px; height:46px; border-radius:50%; border:4px solid #dfe5fb; border-top-color:#4361ee; animation:ringSpin .8s linear infinite; }
+        @keyframes ringSpin { to { transform:rotate(360deg); } }
+        #bootSplash .txt { font-weight:600; font-size:.95rem; letter-spacing:.2px; }
     </style>
 
 </head>
 <body>
+
+    <!-- LAYAR LOADING (setelah klik Login & saat memuat data) -->
+    <div id="bootSplash"><img src="logo.png" alt="PartTrack"><div class="ring"></div><div class="txt" id="bootSplashText">Menyiapkan data...</div></div>
+    <script>
+        function tampilSplash(t) { var e = document.getElementById('bootSplash'); if (!e) return; if (t) document.getElementById('bootSplashText').textContent = t; e.classList.add('show'); }
+        function sembunyiSplash() { var e = document.getElementById('bootSplash'); if (e) e.classList.remove('show'); }
+        (function () {
+            try { if (Object.keys(localStorage).some(function (k) { return /^sb-.*-auth-token$/.test(k); })) tampilSplash('Memuat data...'); } catch (e) {}
+            setTimeout(sembunyiSplash, 25000);   // pengaman
+        })();
+    </script>
 
     <!-- HALAMAN LOGIN & REGISTRASI AKUN -->
     <div id="loginWrapper">
@@ -572,7 +602,7 @@
 </div>
 
             <div class="auth-tabs mb-4">
-                <button type="button" class="auth-tab active" id="authTabLogin" onclick="tampilkanAuthPanel('login')"><i class="fas fa-right-to-bracket me-1"></i> Masuk</button>
+                <button type="button" class="auth-tab active" id="authTabLogin" onclick="tampilkanAuthPanel('login')"><i class="fas fa-right-to-bracket me-1"></i> Login</button>
                 <button type="button" class="auth-tab" id="authTabRegister" onclick="tampilkanAuthPanel('register')"><i class="fas fa-user-plus me-1"></i> Daftar Akun</button>
             </div>
 
@@ -588,8 +618,8 @@
                     <input type="password" class="form-control form-control-lg fs-6" id="loginPassword" placeholder="Masukkan password">
                 </div>
 
-                <button class="btn btn-primary btn-lg w-100 fw-bold shadow-sm py-3" onclick="prosesLogin()">
-                    <i class="fas fa-sign-in-alt me-2"></i> Masuk Sistem
+                <button class="btn btn-primary btn-lg w-100 fw-bold py-3" id="btnLogin" onclick="prosesLogin()">
+                    <i class="fas fa-sign-in-alt me-2"></i> Login
                 </button>
             </div>
 
@@ -2422,6 +2452,7 @@
 
     (async function boot() {
         if (!SB_CONFIG_OK) {
+            sembunyiSplash();
             sbTampilkanError('Supabase belum dikonfigurasi', 'Isi SUPABASE_URL dan SUPABASE_ANON_KEY di index.html (Supabase → Project Settings → API).', false);
             return;
         }
@@ -2447,6 +2478,7 @@
             }
         } catch (e) {
             console.error('Boot gagal', e);
+            sembunyiSplash();
             sbTampilkanError('Tidak bisa terhubung ke server', 'Periksa koneksi internet lalu coba lagi.\n' + (e && e.message ? e.message : ''), true);
             return;
         }
@@ -2456,6 +2488,7 @@
         });
 
         jalankanAplikasi();
+        sembunyiSplash();
         if (login) {
             mulaiRealtime();
             if (sessionStorage.getItem('sb_welcome')) {
@@ -3200,14 +3233,30 @@
         }
 
         async function prosesLogin() {
+            const btn = document.getElementById('btnLogin');
+            if (btn && btn.disabled) return;
             const username = normalisasiUsername(document.getElementById('loginUsername')?.value);
             const password = String(document.getElementById('loginPassword')?.value || '');
             if (!username || !password) { alert('Masukkan username dan password.'); return; }
-            const hasil = await sbLogin(username, password);
-            if (!hasil.ok) { alert(hasil.msg); return; }
-            sessionStorage.setItem('sb_welcome', '1');
-            location.reload();   // muat ulang agar data dari server ditarik sesuai hak akses akun
+            const teksAsli = btn ? btn.innerHTML : '';
+            if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Memproses...'; }
+            let berhasil = false;
+            try {
+                const hasil = await sbLogin(username, password);
+                if (!hasil.ok) { alert(hasil.msg); return; }
+                berhasil = true;
+                sessionStorage.setItem('sb_welcome', '1');
+                tampilSplash('Menyiapkan data...');
+                location.reload();   // muat ulang agar data dari server ditarik sesuai hak akses akun
+            } finally {
+                if (!berhasil && btn) { btn.disabled = false; btn.innerHTML = teksAsli; }
+            }
         }
+
+        ['loginUsername', 'loginPassword'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); prosesLogin(); } });
+        });
 
 
         // ============================================================
