@@ -2348,8 +2348,11 @@
     };
 
     async function muatDataDariServer() {
-        const { data, error } = await sb.from('app_store').select('key,value');
-        if (error) throw error;
+        // Unduh tiap key secara paralel (lebih cepat daripada satu permintaan besar)
+        const hasil = await Promise.all(SHARED_KEYS.map(k => sb.from('app_store').select('key,value').eq('key', k).maybeSingle()));
+        const gagal = hasil.find(h => h.error);
+        if (gagal) throw gagal.error;
+        const data = hasil.map(h => h.data).filter(Boolean);
         if (!data.length) {
             const adaLokal = SHARED_KEYS.some(k => localStorage.getItem(k) !== null);
             if (window.__SB_PROFILE.role === 'admin' && adaLokal &&
@@ -2465,8 +2468,9 @@
                 if (prof && prof.status === 'active') {
                     window.__SB_PROFILE = prof;
                     setSesiLokal(prof);
-                    await muatDataDariServer();
-                    await muatProfilDariServer();
+                    tampilSplash('Mengambil data dari server...');
+                    await Promise.all([muatDataDariServer(), muatProfilDariServer()]);
+                    tampilSplash('Menyiapkan tampilan...');
                     login = true;
                 } else {
                     await sb.auth.signOut();
