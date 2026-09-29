@@ -601,6 +601,7 @@
                         <option value="driver">Driver</option>
                         <option value="sparepart">Sparepart</option>
                         <option value="salespart">Salesman Part</option>
+                        <option value="warehouse">Warehouse Kima</option>
                     </select>
                 </div>
                 <div id="registerDealerBlock">
@@ -674,7 +675,7 @@
     </div>
 </div>
 <ul class="nav flex-column flex-grow-1 pt-3 px-2" id="sidebarMenu" role="tablist">
-                <li class="nav-item role-menu admin-only" role="presentation">
+                <li class="nav-item role-menu wh-access admin-only" role="presentation">
                     <button class="nav-link w-100 text-start" data-bs-toggle="pill" data-bs-target="#menu-keluar" type="button" role="tab">
                         <i class="fas fa-truck-loading"></i><span>Surat Jalan Keluar</span>
                     </button>
@@ -695,17 +696,17 @@
                         <i class="fas fa-camera"></i><span>Input SJ & Kamera POD</span>
                     </button>
                 </li>
-                <li class="nav-item role-menu admin-only" role="presentation">
+                <li class="nav-item role-menu wh-access admin-only" role="presentation">
                     <button class="nav-link w-100 text-start" data-bs-toggle="pill" data-bs-target="#menu-kembali" type="button" role="tab">
                         <i class="fas fa-undo-alt"></i><span>Pengembalian SJ</span>
                     </button>
                 </li>
-                <li class="nav-item role-menu admin-only" role="presentation">
+                <li class="nav-item role-menu wh-access admin-only" role="presentation">
                     <button class="nav-link w-100 text-start" data-bs-toggle="pill" data-bs-target="#menu-outstanding" type="button" role="tab" onclick="muatDataOutstanding()">
                         <i class="fas fa-exclamation-triangle"></i><span>Outstanding <span class="badge bg-danger ms-1" id="badgeOutstanding">0</span></span>
                     </button>
                 </li>
-                <li class="nav-item role-menu admin-only" role="presentation">
+                <li class="nav-item role-menu wh-access admin-only" role="presentation">
                     <button class="nav-link w-100 text-start" data-bs-toggle="pill" data-bs-target="#menu-giso" type="button" role="tab" onclick="muatDataOSGISO()">
                         <i class="fas fa-tasks"></i><span>OS GI SO <span class="badge bg-warning text-dark ms-1" id="badgeGISO">0</span></span>
                     </button>
@@ -745,17 +746,17 @@
                         <i class="fas fa-database"></i><span>DB GI SO Viewer</span>
                     </button>
                 </li>
-                <li class="nav-item role-menu admin-only" role="presentation">
+                <li class="nav-item role-menu wh-access admin-only" role="presentation">
                     <button class="nav-link w-100 text-start" data-bs-toggle="pill" data-bs-target="#menu-dashboard" type="button" role="tab" onclick="initDashboardCharts()">
                         <i class="fas fa-chart-line"></i><span>Dashboard & Grafik</span>
                     </button>
                 </li>
-                <li class="nav-item role-menu admin-only" role="presentation">
+                <li class="nav-item role-menu wh-access admin-only" role="presentation">
                     <button class="nav-link w-100 text-start" data-bs-toggle="pill" data-bs-target="#menu-laporan-bulanan" type="button" role="tab" onclick="muatLaporanBulanan()">
                         <i class="fas fa-calendar-check"></i><span>Laporan Bulanan</span>
                     </button>
                 </li>
-                <li class="nav-item role-menu admin-only" role="presentation">
+                <li class="nav-item role-menu wh-access admin-only" role="presentation">
                     <button class="nav-link w-100 text-start" data-bs-toggle="pill" data-bs-target="#menu-rekap-harian" type="button" role="tab" onclick="muatRekapHarian()">
                         <i class="fas fa-table-list"></i><span>Rekap Harian</span>
                     </button>
@@ -1364,6 +1365,7 @@
                                         <option value="driver">Driver</option>
                                         <option value="sparepart">Sparepart</option>
                                         <option value="salespart">Salesman Part</option>
+                                        <option value="warehouse">Warehouse Kima</option>
                                     </select>
                                 </div>
                                 <div class="col-md-3">
@@ -2035,6 +2037,8 @@
         'gudang_transaksi', 'gudang_pengembalian_sj', 'gudang_shipment_terinput',
         'gudang_total_sj', 'gudang_total_do', 'gudang_belum_kembali'
     ];
+    // Key yang boleh ditulis role warehouse (harus sama dengan policy di supabase_warehouse.sql)
+    const WAREHOUSE_KEYS = DRIVER_KEYS.concat(['gudang_outstanding_harian']);
     // Sesi login per-perangkat (tetap di localStorage, tidak dikirim ke server)
     const SESI_LOKAL_KEYS = [
         'gudang_current_role', 'gudang_current_dealer', 'gudang_current_dealer_username',
@@ -2231,6 +2235,7 @@
         const r = window.__SB_PROFILE && window.__SB_PROFILE.role;
         if (r === 'admin') return SHARED_KEYS.includes(key);
         if (r === 'driver') return DRIVER_KEYS.includes(key);
+        if (r === 'warehouse') return WAREHOUSE_KEYS.includes(key);
         return false;
     }
 
@@ -2467,7 +2472,7 @@
         let currentDealerUsername = localStorage.getItem('gudang_current_dealer_username') || localStorage.getItem('gudang_current_user') || "";
         let currentUsername = currentDealerUsername;
         // Sesi internal lama tanpa identitas user harus login ulang agar tidak melewati autentikasi baru.
-        if ((currentRole === 'admin' || currentRole === 'driver' || currentRole === 'sparepart' || currentRole === 'salespart') && !currentUsername) {
+        if ((currentRole === 'admin' || currentRole === 'driver' || currentRole === 'sparepart' || currentRole === 'salespart' || currentRole === 'warehouse') && !currentUsername) {
             localStorage.removeItem('gudang_current_role');
             currentRole = '';
         }
@@ -2685,7 +2690,7 @@
         function simpanAkunInternal() { /* akun kini disimpan di tabel profiles (Supabase) */ }
 
         function roleInternalText(role) {
-            return ({admin:'Admin Gudang', driver:'Driver', sparepart:'Sparepart', salespart:'Salesman Part'})[role] || role;
+            return ({admin:'Admin Gudang', driver:'Driver', sparepart:'Sparepart', salespart:'Salesman Part', warehouse:'Warehouse Kima'})[role] || role;
         }
 
         function statusInternalText(status) {
@@ -2702,7 +2707,7 @@
             const username = normalisasiUsername(document.getElementById('newInternalUsername')?.value);
             const password = String(document.getElementById('newInternalPassword')?.value || '');
             if (!name || !username || password.length < 6) { alert('Lengkapi nama, username, dan password minimal 6 karakter.'); return; }
-            if (!['admin', 'driver', 'sparepart', 'salespart'].includes(role)) { alert('Role tidak valid.'); return; }
+            if (!['admin', 'driver', 'sparepart', 'salespart', 'warehouse'].includes(role)) { alert('Role tidak valid.'); return; }
             if (!usernameValid(username)) { alert(USERNAME_ATURAN); return; }
             const hasil = await sbAdminBuatUser({ username, password, name, role });
             if (!hasil.ok) { alert(hasil.msg); return; }
@@ -2878,7 +2883,7 @@
         }
 
         async function daftarAkunInternalMandiri(role) {
-            if (!['driver', 'sparepart', 'salespart'].includes(role)) return;
+            if (!['driver', 'sparepart', 'salespart', 'warehouse'].includes(role)) return;
             const name = dbText(document.getElementById('registerFullName')?.value);
             const username = normalisasiUsername(document.getElementById('registerUsername')?.value);
             const password = String(document.getElementById('registerPassword')?.value || '');
@@ -3247,7 +3252,8 @@
                 driver: 'Hati-hati di jalan, jangan lupa upload bukti tanda terima.',
                 dealer: 'Pantau pengiriman dan status pesanan Anda di sini.',
                 sparepart: 'Laporan pengiriman terbaru siap dilihat.',
-                salespart: 'Laporan pengiriman terbaru siap dilihat.'
+                salespart: 'Laporan pengiriman terbaru siap dilihat.',
+                warehouse: 'Semoga pengiriman hari ini lancar.'
             })[currentRole] || 'Selamat bekerja!';
             const t = document.createElement('div');
             t.className = 'welcome-toast';
@@ -3310,6 +3316,10 @@
                 adminDealerEls.forEach(el => el.style.display = 'block');
                 aktifkanTabAwal('#menu-laporan');
                 renderLaporanUlang();
+            } else if (currentRole === 'warehouse') {
+                document.getElementById('userRoleBadge').innerText = `Warehouse Kima • ${currentUsername || 'User'}`;
+                document.querySelectorAll('.wh-access').forEach(el => el.style.display = 'block');
+                aktifkanTabAwal('#menu-keluar');
             } else if (currentRole === 'sparepart' || currentRole === 'salespart') {
                 const label = currentRole === 'sparepart' ? 'Sparepart' : 'Salesman Part';
                 document.getElementById('userRoleBadge').innerText = `${label} • ${currentUsername || 'User'}`;
