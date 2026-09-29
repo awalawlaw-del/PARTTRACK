@@ -523,13 +523,35 @@
         .lap-ai-item .t { font-weight:700; color:#0f172a; font-size:.9rem; }
         .lap-ai-item .d { color:#475569; font-size:.85rem; line-height:1.55; }
         .lap-ai-foot { padding:10px 18px; background:#f8fafc; color:#94a3b8; font-size:.72rem; }
-            /* HP: tombol Keluar Akun tetap terlihat (ikon saja) di bawah sidebar */
+        /* ===== HP: menu geser (drawer) + top bar ===== */
+        #mobileBar, #sidebarBackdrop { display:none; }
         @media (max-width:768px) {
-            #sidebar > .p-3.border-top { display:block !important; padding:8px 6px !important; }
-            #sidebar > .p-3.border-top .user-chip { display:none !important; }
-            #sidebar > .p-3.border-top .btn { padding:10px 0; }
-            #sidebar > .p-3.border-top .btn .logout-text { display:none; }
-            #sidebar > .p-3.border-top .btn i { margin:0 !important; font-size:1.2rem; }
+            #mobileBar { display:flex; position:fixed; top:0; left:0; right:0; height:56px; z-index:90; align-items:center; gap:12px; padding:0 12px; background:#0e1730; color:#fff; box-shadow:0 2px 10px rgba(0,0,0,.2); }
+            #mobileBar .mb-burger { width:40px; height:40px; border:0; border-radius:10px; background:rgba(255,255,255,.1); color:#fff; font-size:1.1rem; }
+            #mobileBar .mb-logo { background:#fff; border-radius:8px; padding:3px 8px; display:flex; align-items:center; }
+            #mobileBar .mb-logo img { height:30px; }
+            #mobileBar .mb-title { font-weight:700; font-size:.95rem; letter-spacing:.3px; }
+
+            #sidebar { width:280px !important; max-width:85vw; transform:translateX(-105%); z-index:1050; box-shadow:none; }
+            body.sidebar-open #sidebar { transform:none; box-shadow:8px 0 30px rgba(0,0,0,.35); }
+            #sidebarBackdrop { display:block; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:1040; opacity:0; pointer-events:none; transition:opacity .25s; }
+            body.sidebar-open #sidebarBackdrop { opacity:1; pointer-events:auto; }
+
+            /* kembalikan teks menu, badge, dan tombol Keluar Akun */
+            #sidebar .nav-link span { display:inline !important; }
+            #sidebar .badge { display:inline-block !important; }
+            #sidebar .badge.d-block { display:block !important; }
+            #sidebar > .p-3.border-top { display:block !important; padding:14px !important; }
+            #sidebar .nav-link { text-align:left; padding:12px 16px; margin:0 0 4px 0; font-size:.92rem; }
+            #sidebar .nav-link i { margin-right:12px; font-size:1rem; }
+
+            #content { margin-left:0 !important; padding:68px 12px 20px !important; }
+            #content > .d-flex.border-bottom { flex-direction:column; align-items:stretch !important; gap:12px; padding:14px !important; }
+            #content > .d-flex.border-bottom > .d-flex { justify-content:flex-start; flex-wrap:wrap; }
+            #headerTitle { font-size:1.15rem !important; }
+            #subHeaderInfo { font-size:.75rem; }
+            .card-body { padding:14px; }
+            .table-responsive { -webkit-overflow-scrolling:touch; }
         }
     </style>
 
@@ -633,6 +655,14 @@
     <!-- APLIKASI UTAMA -->
     <div id="appContainer" style="display: none;">
         
+        <!-- TOP BAR & BACKDROP (HP) -->
+        <div id="mobileBar">
+            <button type="button" class="mb-burger" onclick="toggleSidebar()" aria-label="Menu"><i class="fas fa-bars"></i></button>
+            <div class="mb-logo"><img src="logo.png" alt="PartTrack"></div>
+            <div class="mb-title">PartTrack</div>
+        </div>
+        <div id="sidebarBackdrop" onclick="closeSidebar()"></div>
+
         <!-- SIDEBAR NAVIGATION -->
         <div id="sidebar" class="d-flex flex-column">
 <div class="sidebar-header d-flex align-items-center justify-content-between">
@@ -6667,6 +6697,14 @@
                 refreshInboxBadge();
             } catch (err) { console.warn('Gagal memulihkan sesi:', err); }
         })();
+    </script>
+    <script>
+        function toggleSidebar() { document.body.classList.toggle('sidebar-open'); }
+        function closeSidebar() { document.body.classList.remove('sidebar-open'); }
+        document.addEventListener('click', function (e) {
+            if (e.target.closest && e.target.closest('#sidebarMenu .nav-link')) closeSidebar();
+        });
+        window.addEventListener('resize', function () { if (window.innerWidth > 768) closeSidebar(); });
     </script>
 </body>
 </html>
