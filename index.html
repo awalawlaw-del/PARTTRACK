@@ -6018,7 +6018,8 @@
             let file = fileInput.files[0];
             let reader = new FileReader();
             reader.onload = function(evt) {
-                item.podFoto = evt.target.result;
+              kompresFotoPOD(evt.target.result, function(fotoKecil) {
+                item.podFoto = fotoKecil;
                 item.status = 'OK';
                 if (!pengembalianSJList.includes(ship)) pengembalianSJList.push(ship);
                 belumKembali = Math.max(0, belumKembali - 1);
@@ -6032,9 +6033,32 @@
                 muatTabelDriverPOD();
                 updateStatistikUI();
                 alert(`Bukti foto tanda terima (POD) untuk shipment ${ship} berhasil di-upload!`);
+              });
             };
             reader.readAsDataURL(file);
         });
+
+        // Perkecil foto POD (maks 1280px, JPEG 70%) supaya data transaksi tidak membengkak.
+        // Bila gagal / hasilnya tidak lebih kecil, foto asli dipakai.
+        function kompresFotoPOD(dataUrl, cb) {
+            try {
+                const img = new Image();
+                img.onload = function() {
+                    try {
+                        const MAX = 1280;
+                        const r = Math.min(1, MAX / Math.max(img.width, img.height));
+                        const c = document.createElement('canvas');
+                        c.width = Math.round(img.width * r);
+                        c.height = Math.round(img.height * r);
+                        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+                        const hasil = c.toDataURL('image/jpeg', 0.7);
+                        cb(hasil.length < dataUrl.length ? hasil : dataUrl);
+                    } catch (e) { cb(dataUrl); }
+                };
+                img.onerror = function() { cb(dataUrl); };
+                img.src = dataUrl;
+            } catch (e) { cb(dataUrl); }
+        }
 
         function updateStatistikUI() {
             totalSJ = transaksiData.length;
