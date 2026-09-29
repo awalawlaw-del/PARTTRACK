@@ -1040,11 +1040,18 @@
                             </div>
                         </div>
                         <div class="card-body">
+                            <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
+                                <span class="fw-bold small text-secondary"><i class="fas fa-calendar-alt text-primary me-1"></i> Tampilkan Tgl Kirim:</span>
+                                <input type="date" id="laporanStart" class="form-control form-control-sm" style="width: 140px;" onchange="filterLaporanTanggal()">
+                                <span class="small text-muted">s/d</span>
+                                <input type="date" id="laporanEnd" class="form-control form-control-sm" style="width: 140px;" onchange="filterLaporanTanggal()">
+                                <button class="btn btn-sm btn-outline-danger py-1" onclick="hapusFilterTanggal('laporanStart', 'laporanEnd'); filterLaporanTanggal()"><i class="fas fa-times me-1"></i>Hapus Tgl</button>
+                            </div>
                             <div class="row mb-3">
                                 <div class="col-md-4">
                                     <div class="input-group input-group-sm">
                                         <span class="input-group-text bg-light"><i class="fas fa-search"></i></span>
-                                        <input type="text" class="form-control" id="searchFakturSJ" placeholder="Cari Nomor Faktur / Surat Jalan..." oninput="renderLaporanUlang()">
+                                        <input type="text" class="form-control" id="searchFakturSJ" placeholder="Cari Faktur / Surat Jalan / Tgl Kirim (mis. 24/09/2026)..." oninput="currentPageLaporan = 1; renderLaporanUlang()">
                                     </div>
                                 </div>
                                 <div class="col-md-8 text-end">
@@ -1554,7 +1561,7 @@
                         </div>
                         <div class="card-body p-4">
                             <div class="row g-4">
-                                <div class="col-xl-6"><div class="card border shadow-sm p-3"><div style="height: 300px;"><canvas id="chartLeadTime"></canvas></div></div></div>
+                                <div class="col-12"><div class="card border shadow-sm p-3"><div style="height: 380px;"><canvas id="chartLeadTime"></canvas></div></div></div>
                                 <div class="col-xl-6"><div class="card border shadow-sm p-3"><div style="height: 300px;"><canvas id="chartKoli"></canvas></div></div></div>
                             </div>
                         </div>
@@ -4878,9 +4885,23 @@
                 data = data.filter(i => i.nama_dealer.toLowerCase().includes(currentDealer.toLowerCase()));
             }
 
+            const fs = (document.getElementById('laporanStart') || {}).value || '';
+            const fe = (document.getElementById('laporanEnd') || {}).value || '';
+            if (fs || fe) {
+                data = data.filter(i => {
+                    const t = cleanDateOnly(i.tgl_kirim || i.tgl_kirim_raw);
+                    if (!t) return false;
+                    if (fs && t < fs) return false;
+                    if (fe && t > fe) return false;
+                    return true;
+                });
+            }
+
             let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase();
             if (keyword) {
                 data = data.filter(i => 
+                    String(formatDateToDisplay(i.tgl_kirim) || "").toLowerCase().includes(keyword) ||
+                    String(cleanDateOnly(i.tgl_kirim || i.tgl_kirim_raw) || "").includes(keyword) ||
                     String(i.no_faktur || "").toLowerCase().includes(keyword) || 
                     String(i.shipment || "").toLowerCase().includes(keyword) ||
                     String(i.nama_dealer || "").toLowerCase().includes(keyword) ||
@@ -5121,6 +5142,8 @@
             XLSX.utils.book_append_sheet(wb, ws, "Status Pesanan");
             XLSX.writeFile(wb, `Laporan_Status_Pesanan_${new Date().toISOString().split('T')[0]}.xlsx`);
         }
+
+        function filterLaporanTanggal() { currentPageLaporan = 1; renderLaporanUlang(); }
 
         function renderLaporanUlang() {
             let thead = document.getElementById('tabelLaporanHeader');
@@ -6827,23 +6850,31 @@
                 });
                 const tglList = Object.keys(perTgl).sort();
                 const nilai = tglList.map(t => +(perTgl[t].sum / perTgl[t].n).toFixed(1));
-                // Tanda naik: lead time >= rata-rata (maks. 3 tanggal sebelumnya) + 1 hari
-                const pembanding = nilai.map((v, i) => {
-                    const prev = nilai.slice(Math.max(0, i - 3), i);
-                    if (!prev.length) return null;
-                    const avg = prev.reduce((a, b) => a + b, 0) / prev.length;
-                    return (v >= avg + 1 && v >= avg * 1.25) ? +avg.toFixed(1) : null;
+                const rataPeriode = nilai.length ? +(nilai.reduce((a, b) => a + b, 0) / nilai.length).toFixed(1) : 0;
+                // status tiap titik: 'tajam' (merah) | 'naik' (oranye) | ''
+                const status = nilai.map((v, i) => {
+                    if (i === 0) return '';
+                    const prev3 = nilai.slice(Math.max(0, i - 3), i);
+                    const avg3 = prev3.reduce((a, b) => a + b, 0) / prev3.length;
+                    if (v >= avg3 + 1 && v >= avg3 * 1.25) return 'tajam';
+                    if (v > nilai[i - 1]) return 'naik';
+                    return '';
                 });
-                const tandaWarning = {
-                    id: 'tandaWarning',
+                const warna = st => st === 'tajam' ? '#dc2626' : st === 'naik' ? '#f59e0b' : '#4361ee';
+                const tandaLead = {
+                    id: 'tandaLead',
                     afterDatasetsDraw(chart) {
                         const meta = chart.getDatasetMeta(0);
                         const c = chart.ctx;
-                        c.save(); c.font = 'bold 16px sans-serif'; c.textAlign = 'center';
-                        pembanding.forEach((b, i) => {
-                            if (b === null || !meta.data[i]) return;
-                            c.fillStyle = '#dc3545';
-                            c.fillText('\u26A0', meta.data[i].x, meta.data[i].y - 12);
+                        c.save(); c.textAlign = 'center';
+                        nilai.forEach((v, i) => {
+                            const pt = meta.data[i]; if (!pt || !tglList.length) return;
+                            c.font = '600 11px sans-serif'; c.fillStyle = '#334155';
+                            c.fillText(v, pt.x, pt.y - (status[i] ? 26 : 12));
+                            if (status[i]) {
+                                c.font = 'bold 15px sans-serif'; c.fillStyle = warna(status[i]);
+                                c.fillText(status[i] === 'tajam' ? '\u26A0' : '\u25B2', pt.x, pt.y - 11);
+                            }
                         });
                         c.restore();
                     }
@@ -6853,34 +6884,57 @@
                     data: {
                         labels: tglList.length ? tglList.map(t => formatDateToDisplay(t)) : ['Tidak Ada Data'],
                         datasets: [{
-                            label: 'Rata-Rata Lead Time (Hari)',
+                            label: 'Rata-rata lead time (hari)',
                             data: tglList.length ? nilai : [0],
                             borderColor: '#4361ee',
-                            backgroundColor: 'rgba(67, 97, 238, 0.12)',
-                            tension: 0.3,
+                            borderWidth: 3,
+                            tension: 0.35,
                             fill: true,
-                            pointRadius: pembanding.map(b => b !== null ? 8 : 4),
-                            pointBackgroundColor: pembanding.map(b => b !== null ? '#dc3545' : '#4361ee'),
-                            pointBorderColor: pembanding.map(b => b !== null ? '#dc3545' : '#4361ee')
+                            backgroundColor: (ctx) => {
+                                const a = ctx.chart.chartArea; if (!a) return 'rgba(67,97,238,0.1)';
+                                const g = ctx.chart.ctx.createLinearGradient(0, a.top, 0, a.bottom);
+                                g.addColorStop(0, 'rgba(67,97,238,0.30)'); g.addColorStop(1, 'rgba(67,97,238,0.02)');
+                                return g;
+                            },
+                            pointRadius: status.map(st => st ? 7 : 5),
+                            pointHoverRadius: 9,
+                            pointBackgroundColor: status.map(st => st ? warna(st) : '#ffffff'),
+                            pointBorderColor: status.map(st => warna(st)),
+                            pointBorderWidth: 3
+                        }, {
+                            label: 'Rata-rata periode (' + rataPeriode + ' hari)',
+                            data: tglList.length ? nilai.map(() => rataPeriode) : [0],
+                            borderColor: '#94a3b8', borderDash: [6, 6], borderWidth: 1.5,
+                            pointRadius: 0, pointHoverRadius: 0, fill: false
                         }]
                     },
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
+                        layout: { padding: { top: 30, right: 12 } },
+                        interaction: { mode: 'index', intersect: false },
                         plugins: {
-                            title: { display: true, text: 'Tren Rata-Rata Lead Time per Tanggal  (\u26A0 merah = naik tajam dibanding 3 tanggal sebelumnya)' },
+                            title: { display: true, text: 'Tren Rata-Rata Lead Time per Tanggal Kirim', font: { size: 15 } },
+                            subtitle: { display: true, text: '\u25B2 oranye = lebih tinggi dari hari sebelumnya   |   \u26A0 merah = naik tajam (\u2265 1 hari & \u2265 25% di atas rata-rata 3 tanggal sebelumnya)', padding: { bottom: 8 } },
+                            legend: { position: 'bottom', labels: { usePointStyle: true } },
                             tooltip: {
                                 callbacks: {
-                                    afterLabel: ctx => pembanding[ctx.dataIndex] !== null && pembanding[ctx.dataIndex] !== undefined
-                                        ? 'Naik tajam (rata-rata sebelumnya: ' + pembanding[ctx.dataIndex] + ' hari)' : ''
+                                    label: c => c.datasetIndex === 0 ? ' Lead time: ' + c.parsed.y + ' hari' : ' ' + c.dataset.label,
+                                    afterLabel: c => {
+                                        if (c.datasetIndex !== 0 || c.dataIndex === 0) return '';
+                                        const d = +(nilai[c.dataIndex] - nilai[c.dataIndex - 1]).toFixed(1);
+                                        const st = status[c.dataIndex];
+                                        return (d > 0 ? '+' : '') + d + ' hari dari tanggal sebelumnya' + (st === 'tajam' ? '  \u26A0 NAIK TAJAM' : st === 'naik' ? '  \u25B2 naik' : '');
+                                    }
                                 }
                             }
                         },
                         scales: {
-                            y: { beginAtZero: true, title: { display: true, text: 'Hari' } }
+                            x: { grid: { display: false } },
+                            y: { beginAtZero: true, grace: '15%', grid: { color: 'rgba(148,163,184,0.25)' }, title: { display: true, text: 'Hari' } }
                         }
                     },
-                    plugins: [tandaWarning]
+                    plugins: [tandaLead]
                 });
             }
 
