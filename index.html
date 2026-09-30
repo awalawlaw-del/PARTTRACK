@@ -207,11 +207,6 @@
         }
         .table tbody tr { transition: background .15s ease, transform .15s ease; }
         .table tbody tr:hover { background: #eef4ff !important; }
-        /* Judul kolom tabel dibekukan saat tabel di-scroll */
-        .table-responsive { max-height: 70vh; overflow-y: auto; }
-        .table-responsive .table thead { position: sticky; top: 0; z-index: 5; }
-        .table-responsive .table thead th { position: static; }
-        .table-responsive .table thead:not(.table-dark):not(.table-light) th { background: #f1f5f9; }
         .btn {
             border-radius: 9px;
             transition: transform .15s ease, box-shadow .15s ease;
@@ -746,6 +741,11 @@
                         <i class="fas fa-tasks"></i><span>OS GI SO <span class="badge bg-warning text-dark ms-1" id="badgeGISO">0</span></span>
                     </button>
                 </li>
+                <li class="nav-item role-menu wh-access admin-only" role="presentation">
+                    <button class="nav-link w-100 text-start" data-bs-toggle="pill" data-bs-target="#menu-os-freegood" type="button" role="tab" onclick="muatOSFreegood()">
+                        <i class="fas fa-gift"></i><span>OS FREEGOD <span class="badge bg-info text-dark ms-1" id="badgeFreegood">0</span></span>
+                    </button>
+                </li>
                 <li class="nav-item role-menu admin-only" role="presentation">
                     <button class="nav-link w-100 text-start" data-bs-toggle="pill" data-bs-target="#menu-db-faktur" type="button" role="tab" onclick="muatDBFaktur()">
                         <i class="fas fa-file-invoice"></i><span>DB Faktur</span>
@@ -829,9 +829,6 @@
                         <i class="fas fa-inbox me-1"></i> Inbox
                         <span id="badgeInbox" class="badge bg-danger inbox-badge" style="display:none;">0</span>
                     </button>
-                    <button class="btn btn-outline-primary btn-sm fw-semibold admin-only shadow-sm" onclick="kompresUlangFotoLama()">
-                        <i class="fas fa-compress me-1"></i> Kompres Foto Lama
-                    </button>
                     <button class="btn btn-outline-danger btn-sm fw-semibold admin-only shadow-sm" onclick="resetSemuaData()">
                         <i class="fas fa-trash-alt me-1"></i> Reset Sistem
                     </button>
@@ -846,10 +843,10 @@
                     <div class="row g-3 mb-3">
                         <div class="col-md-12 d-flex align-items-center gap-2 flex-wrap bg-white p-2 rounded shadow-sm">
                             <span class="fw-bold small text-secondary me-1"><i class="fas fa-calendar-alt text-primary me-1"></i> Filter Tanggal:</span>
-                            <input type="date" id="keluarStart" class="form-control form-control-sm" style="width: 140px;" onchange="updateStatistikUI()">
+                            <input type="date" id="keluarStart" class="form-control form-control-sm" style="width: 140px;">
                             <span class="small text-muted">s/d</span>
-                            <input type="date" id="keluarEnd" class="form-control form-control-sm" style="width: 140px;" onchange="updateStatistikUI()">
-                            <button class="btn btn-sm btn-outline-danger py-1" onclick="hapusFilterTanggal('keluarStart', 'keluarEnd'); updateStatistikUI()"><i class="fas fa-times me-1"></i>Hapus Tgl</button>
+                            <input type="date" id="keluarEnd" class="form-control form-control-sm" style="width: 140px;">
+                            <button class="btn btn-sm btn-outline-danger py-1" onclick="hapusFilterTanggal('keluarStart', 'keluarEnd')"><i class="fas fa-times me-1"></i>Hapus Tgl</button>
                         </div>
                     </div>
 
@@ -1033,21 +1030,19 @@
                     <div class="card shadow-sm border-0 mt-2">
                         <div class="card-header bg-white text-dark py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
                             <h5 class="mb-0 fw-bold"><i class="fas fa-file-alt text-primary me-2"></i>Laporan Pengiriman <span id="labelDealerSub" class="text-warning small"></span></h5>
+                            <div class="d-flex gap-2 align-items-center flex-wrap">
+                                <input type="date" id="exportStart" class="form-control form-control-sm" style="width: 130px;">
+                                <input type="date" id="exportEnd" class="form-control form-control-sm" style="width: 130px;">
+                                <button class="btn btn-success btn-sm fw-bold text-nowrap shadow-sm" onclick="eksporKeExcel()"><i class="fas fa-file-excel me-1"></i> Ekspor</button>
+                                <button class="btn btn-danger btn-sm fw-bold text-nowrap shadow-sm admin-only" style="display:none;" onclick="hapusLaporanByTanggal()" title="Hapus semua laporan sesuai rentang tanggal kirim (kolom tanggal awal & akhir di kiri)"><i class="fas fa-trash-alt me-1"></i> Hapus per Tanggal</button>
+                            </div>
                         </div>
                         <div class="card-body">
-                            <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
-                                <span class="fw-bold small text-secondary"><i class="fas fa-calendar-alt text-primary me-1"></i> Tampilkan Tgl Kirim:</span>
-                                <input type="date" id="laporanStart" class="form-control form-control-sm" style="width: 140px;" onchange="filterLaporanTanggal()">
-                                <span class="small text-muted">s/d</span>
-                                <input type="date" id="laporanEnd" class="form-control form-control-sm" style="width: 140px;" onchange="filterLaporanTanggal()">
-                                <button class="btn btn-sm btn-outline-danger py-1" onclick="hapusFilterTanggal('laporanStart', 'laporanEnd'); filterLaporanTanggal()"><i class="fas fa-times me-1"></i>Hapus Tgl</button>
-                                <button class="btn btn-success btn-sm fw-bold text-nowrap shadow-sm ms-md-2" onclick="eksporKeExcel()" title="Ekspor sesuai Tgl Kirim dan pencarian yang sedang tampil"><i class="fas fa-file-excel me-1"></i> Ekspor</button>
-                            </div>
                             <div class="row mb-3">
                                 <div class="col-md-4">
                                     <div class="input-group input-group-sm">
                                         <span class="input-group-text bg-light"><i class="fas fa-search"></i></span>
-                                        <input type="text" class="form-control" id="searchFakturSJ" placeholder="Cari Faktur / Surat Jalan / Tgl Kirim (mis. 24/09/2026)..." oninput="currentPageLaporan = 1; renderLaporanUlang()">
+                                        <input type="text" class="form-control" id="searchFakturSJ" placeholder="Cari Nomor Faktur / Surat Jalan..." oninput="renderLaporanUlang()">
                                     </div>
                                 </div>
                                 <div class="col-md-8 text-end">
@@ -1236,6 +1231,39 @@
                             <div class="d-flex justify-content-between align-items-center mt-3">
                                 <span class="text-muted small" id="paginationInfoOut">Menampilkan 0 - 0 dari 0 data</span>
                                 <nav><ul class="pagination pagination-sm mb-0" id="paginationNavOut"></ul></nav>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- MENU OS FREEGOD: SP di Database SP yang belum ada di Laporan Pengiriman -->
+                <div class="tab-pane fade" id="menu-os-freegood" role="tabpanel">
+                    <div class="card shadow-sm border-0 mb-4 border-start border-info border-4">
+                        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                            <div>
+                                <h5 class="mb-0 text-dark fw-bold"><i class="fas fa-gift text-info me-2"></i>OS FREEGOD (25 Data/Halaman)</h5>
+                                <span class="small text-muted" id="infoRingkasFreegood">SP dari Database SP yang belum ada di Laporan Pengiriman.</span>
+                            </div>
+                            <div class="d-flex gap-2 align-items-center flex-wrap">
+                                <input type="text" class="form-control form-control-sm" id="searchFreegood" placeholder="Cari No SP / Dealer / Program..." oninput="currentPageFreegood=1; muatOSFreegood()">
+                                <button class="btn btn-outline-info btn-sm fw-bold shadow-sm text-nowrap" onclick="muatOSFreegood()"><i class="fas fa-sync-alt me-1"></i> Refresh</button>
+                                <button class="btn btn-success btn-sm fw-bold shadow-sm text-nowrap" onclick="eksporOSFreegood()"><i class="fas fa-file-excel me-1"></i> Ekspor</button>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-bordered table-striped align-middle text-center">
+                                    <thead class="table-dark">
+                                        <tr>
+                                            <th>No</th><th>No SP</th><th>No Cust</th><th>Nama Dealer</th><th>Nama Program</th><th>Jumlah Item</th><th>Total Qty</th><th>Aksi</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="tabelOSFreegood"></tbody>
+                                </table>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center mt-3">
+                                <span class="text-muted small" id="paginationInfoFreegood">Menampilkan 0 - 0 dari 0 data</span>
+                                <nav><ul class="pagination pagination-sm mb-0" id="paginationNavFreegood"></ul></nav>
                             </div>
                         </div>
                     </div>
@@ -1557,8 +1585,8 @@
                         </div>
                         <div class="card-body p-4">
                             <div class="row g-4">
-                                <div class="col-12"><div class="card border shadow-sm p-3"><div style="height: 380px;"><canvas id="chartLeadTime"></canvas></div></div></div>
-                                <div class="col-12"><div class="card border shadow-sm p-3"><div style="height: 380px;"><canvas id="chartKoli"></canvas></div></div></div>
+                                <div class="col-xl-6"><div class="card border shadow-sm p-3"><div style="height: 300px;"><canvas id="chartLeadTime"></canvas></div></div></div>
+                                <div class="col-xl-6"><div class="card border shadow-sm p-3"><div style="height: 300px;"><canvas id="chartKoli"></canvas></div></div></div>
                             </div>
                         </div>
                     </div>
@@ -1906,6 +1934,25 @@
                 </div>
                 <div class="modal-body text-center p-4">
                     <div id="wrapperModalDetailSJ"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL PETA LIVE LOKASI (ditampilkan di dalam web, link tidak ditampilkan) -->
+    <div class="modal fade" id="modalPetaLive" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-xl">
+            <div class="modal-content border-0 shadow-lg">
+                <div class="modal-header border-bottom">
+                    <h5 class="modal-title fw-bold"><i class="fas fa-map-marked-alt text-primary me-2"></i><span id="judulPetaLive">Live Lokasi Driver</span></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-0" oncontextmenu="return false;">
+                    <iframe id="framePetaLive" title="Live Lokasi" style="width:100%; height:70vh; border:0;" referrerpolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-forms"></iframe>
+                </div>
+                <div class="modal-footer justify-content-between">
+                    <span class="small text-muted"><i class="fas fa-info-circle me-1"></i>Jika peta tidak muncul / kosong, hubungi admin.</span>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="btnPetaTabBaru" style="display:none;" onclick="bukaPetaTabBaruInternal()"><i class="fas fa-up-right-from-square me-1"></i>Buka di tab baru (khusus internal)</button>
                 </div>
             </div>
         </div>
@@ -3460,6 +3507,8 @@
         });
 
         let todayStr = new Date().toISOString().split('T')[0];
+        document.getElementById('exportStart').value = todayStr;
+        document.getElementById('exportEnd').value = todayStr;
         document.getElementById('filterStart').value = todayStr;
         document.getElementById('filterEnd').value = todayStr;
 
@@ -4237,6 +4286,7 @@
             try { muatDataOSGISO(); } catch(e) {}
             try { muatDataStatusPesanan(); } catch(e) {}
             try { muatDataOutstanding(); } catch(e) {}
+            try { muatOSFreegood(); } catch(e) {}
             try { renderLaporanUlang(); } catch(e) {}
             try { refreshInboxBadge(); } catch(e) {}
         }
@@ -4879,23 +4929,9 @@
                 data = data.filter(i => i.nama_dealer.toLowerCase().includes(currentDealer.toLowerCase()));
             }
 
-            const fs = (document.getElementById('laporanStart') || {}).value || '';
-            const fe = (document.getElementById('laporanEnd') || {}).value || '';
-            if (fs || fe) {
-                data = data.filter(i => {
-                    const t = cleanDateOnly(i.tgl_kirim || i.tgl_kirim_raw);
-                    if (!t) return false;
-                    if (fs && t < fs) return false;
-                    if (fe && t > fe) return false;
-                    return true;
-                });
-            }
-
             let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase();
             if (keyword) {
                 data = data.filter(i => 
-                    String(formatDateToDisplay(i.tgl_kirim) || "").toLowerCase().includes(keyword) ||
-                    String(cleanDateOnly(i.tgl_kirim || i.tgl_kirim_raw) || "").includes(keyword) ||
                     String(i.no_faktur || "").toLowerCase().includes(keyword) || 
                     String(i.shipment || "").toLowerCase().includes(keyword) ||
                     String(i.nama_dealer || "").toLowerCase().includes(keyword) ||
@@ -5137,8 +5173,6 @@
             XLSX.writeFile(wb, `Laporan_Status_Pesanan_${new Date().toISOString().split('T')[0]}.xlsx`);
         }
 
-        function filterLaporanTanggal() { currentPageLaporan = 1; renderLaporanUlang(); }
-
         function renderLaporanUlang() {
             let thead = document.getElementById('tabelLaporanHeader');
             let tbody = document.getElementById('tabelLaporan');
@@ -5213,7 +5247,7 @@
                     if (!item.podFoto) {
                         let linkGPSDriver = linkGPSItem(item);
                         if (linkGPSDriver) {
-                            statusKolomHTML = `<a href="${linkGPSDriver}" target="_blank" class="btn btn-sm btn-primary fw-bold py-0 px-2 shadow-sm" style="font-size: 0.75rem;"><i class="fas fa-map-marker-alt me-1"></i> Live Lokasi</a>`;
+                            statusKolomHTML = `<button type="button" class="btn btn-sm btn-primary fw-bold py-0 px-2 shadow-sm" style="font-size: 0.75rem;" onclick="bukaPetaLive('${item.shipment}')"><i class="fas fa-map-marker-alt me-1"></i> Live Lokasi</button>`;
                         } else {
                             statusKolomHTML = `<span class="badge bg-warning text-dark">Belum Upload POD</span>`;
                         }
@@ -5365,9 +5399,9 @@
                         <div class="alert alert-primary mb-3">
                             <h6 class="fw-bold mb-2"><i class="fas fa-satellite-dish me-2"></i>Armada Astra Sedang Dalam Perjalanan</h6>
                             <p class="small text-muted mb-3">Live Lokasi GPS Driver <strong>${item.driver}</strong> aktif dan dapat dipantau.</p>
-                            <a href="${linkGPSDriver}" target="_blank" class="btn btn-primary btn-lg fw-bold px-4 shadow">
+                            <button type="button" class="btn btn-primary btn-lg fw-bold px-4 shadow" onclick="bukaPetaLive('${item.shipment}')">
                                 <i class="fas fa-map-marked-alt me-2"></i> Buka Peta Live Lokasi Driver
-                            </a>
+                            </button>
                         </div>
                     `;
                 } else {
@@ -5606,6 +5640,179 @@
             if (page < 1 || page > totalPages) return;
             currentPageOut = page;
             muatDataOutstanding();
+        }
+
+        // ============================================================
+        // PETA LIVE LOKASI DI DALAM WEB (link GPS tidak ditampilkan / tidak bisa di-copy dari tombol)
+        // ============================================================
+        let _petaLinkAktif = "";
+
+        function bukaPetaLive(shipmentVal) {
+            const item = transaksiData.find(i => i.shipment === shipmentVal);
+            if (!item) return;
+            if (item.podFoto) { alert("Foto serah terima sudah di-upload, live lokasi dinonaktifkan."); return; }
+            const link = linkGPSItem(item);
+            if (!link) { alert("Link GPS belum tersedia untuk pengiriman ini."); return; }
+
+            const detailEl = document.getElementById("modalPreviewFoto");
+            const mapEl = document.getElementById("modalPetaLive");
+            const frame = document.getElementById("framePetaLive");
+
+            const tampil = () => {
+                _petaLinkAktif = link;
+                document.getElementById("judulPetaLive").innerText = `Live Lokasi ${item.driver || ""} - ${item.shipment}`;
+                document.getElementById("btnPetaTabBaru").style.display = (currentRole === "admin" || currentRole === "warehouse") ? "inline-block" : "none";
+                frame.src = link;
+                bootstrap.Modal.getOrCreateInstance(mapEl).show();
+            };
+
+            // Jika modal detail sedang terbuka, tutup dulu agar modal tidak bertumpuk.
+            if (detailEl && detailEl.classList.contains("show")) {
+                detailEl.addEventListener("hidden.bs.modal", tampil, { once: true });
+                bootstrap.Modal.getOrCreateInstance(detailEl).hide();
+            } else {
+                tampil();
+            }
+        }
+
+        function bukaPetaTabBaruInternal() {
+            // Hanya untuk role internal (admin / warehouse). Dealer & role lain tidak melihat tombol ini.
+            if (!(currentRole === "admin" || currentRole === "warehouse")) return;
+            if (_petaLinkAktif) window.open(_petaLinkAktif, "_blank", "noopener,noreferrer");
+        }
+
+        (function () {
+            const mapEl = document.getElementById("modalPetaLive");
+            if (!mapEl) return;
+            // Saat ditutup, kosongkan iframe supaya link tidak tersisa di halaman & tracking berhenti.
+            mapEl.addEventListener("hidden.bs.modal", () => {
+                const frame = document.getElementById("framePetaLive");
+                if (frame) frame.src = "about:blank";
+                _petaLinkAktif = "";
+            });
+        })();
+
+        // ============================================================
+        // HAPUS LAPORAN PENGIRIMAN BERDASARKAN RENTANG TANGGAL (ADMIN)
+        // Memakai tanggal awal & akhir di header Laporan Pengiriman (berdasarkan Tgl Kirim).
+        // ============================================================
+        function hapusLaporanByTanggal() {
+            if (currentRole !== "admin") { alert("Fitur ini hanya untuk admin."); return; }
+            const start = document.getElementById("exportStart").value;
+            const end = document.getElementById("exportEnd").value;
+            if (!start || !end) { alert("Pilih tanggal awal dan tanggal akhir terlebih dahulu."); return; }
+            if (start > end) { alert("Tanggal awal tidak boleh lebih besar dari tanggal akhir."); return; }
+
+            const target = transaksiData.filter(t => {
+                const d = cleanDateOnly(t.tgl_kirim);
+                return d && d >= start && d <= end;
+            });
+            if (!target.length) { alert(`Tidak ada laporan pengiriman dengan Tgl Kirim ${formatDateToDisplay(start)} s/d ${formatDateToDisplay(end)}.`); return; }
+
+            const belumOK = target.filter(t => !isDokOK(t)).length;
+            const jawab = prompt(
+                `HAPUS ${target.length} laporan pengiriman\n` +
+                `Tgl Kirim: ${formatDateToDisplay(start)} s/d ${formatDateToDisplay(end)}\n` +
+                `(${belumOK} di antaranya masih belum kembali)\n\n` +
+                `Data yang dihapus tidak bisa dikembalikan. Shipment-nya akan kembali muncul di Outstanding.\n\n` +
+                `Ketik HAPUS untuk melanjutkan:`
+            );
+            if (jawab === null) return;
+            if (String(jawab).trim().toUpperCase() !== "HAPUS") { alert("Dibatalkan. Kata konfirmasi tidak sesuai."); return; }
+
+            const setHapus = new Set(target);
+            const shipHapus = new Set(target.map(t => t.shipment));
+            transaksiData = transaksiData.filter(t => !setHapus.has(t));
+            shipmentTerinput = shipmentTerinput.filter(s => !shipHapus.has(s));
+            pengembalianSJList = pengembalianSJList.filter(s => !shipHapus.has(s));
+
+            localStorage.setItem("gudang_transaksi", JSON.stringify(transaksiData));
+            localStorage.setItem("gudang_shipment_terinput", JSON.stringify(shipmentTerinput));
+            localStorage.setItem("gudang_pengembalian_sj", JSON.stringify(pengembalianSJList));
+
+            currentPageLaporan = 1;
+            updateStatistikUI();
+            try { renderLaporanUlang(); } catch (e) {}
+            try { muatDataOutstanding(); } catch (e) {}
+            alert(`${target.length} laporan pengiriman berhasil dihapus.`);
+        }
+
+        // ============================================================
+        // OS FREEGOD: SP di Database SP yang nomornya BELUM ada di Laporan Pengiriman
+        // ============================================================
+        let currentPageFreegood = 1;
+
+        function getDaftarOSFreegood(pakaiFilter) {
+            const sudahAda = new Set(transaksiData.map(t => dbKey(t.shipment)));
+            let list = Object.keys(databaseSP)
+                .map(k => ({ _key: k, ...databaseSP[k] }))
+                .filter(x => !sudahAda.has(dbKey(x._key)) && !sudahAda.has(dbKey(x.no_sp)));
+
+            if (pakaiFilter) {
+                const q = dbText(document.getElementById("searchFreegood")?.value).toLowerCase();
+                list = list.filter(x => {
+                    if (!q) return true;
+                    return [x.no_sp, x._key, x.no_cust, x.nama_dealer, x.program].join(" ").toLowerCase().includes(q);
+                });
+            }
+            list.sort((a, b) => (Number(b._uploadedAt) || 0) - (Number(a._uploadedAt) || 0));
+            return list;
+        }
+
+        function muatOSFreegood() {
+            const semua = getDaftarOSFreegood(false);
+            const badge = document.getElementById("badgeFreegood");
+            if (badge) badge.innerText = semua.length;
+
+            const tbody = document.getElementById("tabelOSFreegood");
+            if (!tbody) return;
+
+            const data = getDaftarOSFreegood(true);
+            const totalPages = Math.max(1, Math.ceil(data.length / rowsPerPage));
+            if (currentPageFreegood > totalPages) currentPageFreegood = totalPages;
+            const pageStart = (currentPageFreegood - 1) * rowsPerPage;
+            const page = data.slice(pageStart, pageStart + rowsPerPage);
+
+            tbody.innerHTML = page.length ? page.map((x, i) => `
+                <tr>
+                    <td>${pageStart + i + 1}</td>
+                    <td class="fw-bold text-info-emphasis">${dbSafe(x.no_sp || x._key)}</td>
+                    <td>${dbSafe(x.no_cust || "-")}</td>
+                    <td class="text-start">${dbSafe(x.nama_dealer || "-")}</td>
+                    <td>${dbSafe(x.program || "-")}</td>
+                    <td><span class="badge bg-secondary">${(x.items || []).length}</span></td>
+                    <td><span class="badge bg-primary">${(Number(x.total_qty) || 0).toLocaleString("id-ID")}</span></td>
+                    <td><button class="btn btn-sm btn-outline-primary" onclick="lihatDetailDBSP('${encodeURIComponent(x._key)}')"><i class="fas fa-eye"></i></button></td>
+                </tr>`).join("") :
+                `<tr><td colspan="8" class="text-muted py-3">Tidak ada OS FREEGOD. Semua SP di Database SP sudah masuk Laporan Pengiriman.</td></tr>`;
+
+            const totalQty = data.reduce((s, x) => s + (Number(x.total_qty) || 0), 0);
+            const info = document.getElementById("infoRingkasFreegood");
+            if (info) info.innerText = `SP di Database SP yang belum ada di Laporan Pengiriman. Ditampilkan: ${data.length} SP • Total Qty ${totalQty.toLocaleString("id-ID")}`;
+
+            renderPager("paginationNavFreegood", "paginationInfoFreegood", data.length, currentPageFreegood, "ubahHalamanFreegood");
+        }
+
+        function ubahHalamanFreegood(page) {
+            const totalPages = Math.max(1, Math.ceil(getDaftarOSFreegood(true).length / rowsPerPage));
+            if (page < 1 || page > totalPages) return;
+            currentPageFreegood = page;
+            muatOSFreegood();
+        }
+
+        function eksporOSFreegood() {
+            const rows = [];
+            getDaftarOSFreegood(true).forEach(x => {
+                (x.items && x.items.length ? x.items : [{ part: "", qty: "" }]).forEach(it => rows.push({
+                    "NO SP": x.no_sp || x._key, "No Cust": x.no_cust || "",
+                    "Nama Dealer": x.nama_dealer || "", "Nama Program": x.program || "",
+                    "Part Number": it.part || "", "Qty": it.qty || ""
+                }));
+            });
+            if (!rows.length) { alert("Tidak ada data OS FREEGOD untuk diekspor!"); return; }
+            const ws = XLSX.utils.json_to_sheet(rows), wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "OS FREEGOD");
+            XLSX.writeFile(wb, `OS_FREEGOD_${new Date().toISOString().split("T")[0]}.xlsx`);
         }
 
         function getJenisDokumen() {
@@ -6043,8 +6250,7 @@
             let file = fileInput.files[0];
             let reader = new FileReader();
             reader.onload = function(evt) {
-              kompresFotoPOD(evt.target.result, function(fotoKecil) {
-                item.podFoto = fotoKecil;
+                item.podFoto = evt.target.result;
                 item.status = 'OK';
                 if (!pengembalianSJList.includes(ship)) pengembalianSJList.push(ship);
                 belumKembali = Math.max(0, belumKembali - 1);
@@ -6057,83 +6263,10 @@
                 fileInput.value = "";
                 muatTabelDriverPOD();
                 updateStatistikUI();
-                konfirmasiUploadPOD(ship);
-              });
+                alert(`Bukti foto tanda terima (POD) untuk shipment ${ship} berhasil di-upload!`);
             };
             reader.readAsDataURL(file);
         });
-
-        // Kirim ke server dulu, baru beri tahu driver hasilnya (berhasil / gagal) dengan pesan yang jelas.
-        async function konfirmasiUploadPOD(ship) {
-            let ok = false;
-            try {
-                if (typeof kirimKeServer === 'function' && typeof timers !== 'undefined' && typeof lastSynced !== 'undefined') {
-                    clearTimeout(timers['gudang_transaksi']); timers['gudang_transaksi'] = null;
-                    await kirimKeServer('gudang_transaksi');
-                    ok = (lastSynced['gudang_transaksi'] === localStorage.getItem('gudang_transaksi'));
-                } else { ok = true; }
-            } catch (e) { ok = false; }
-            if (ok) {
-                alert(`BERHASIL\n\nFoto tanda terima untuk shipment ${ship} sudah tersimpan di server.`);
-            } else {
-                alert(`GAGAL - FOTO BELUM TERKIRIM\n\nFoto untuk shipment ${ship} belum masuk ke server.\nJANGAN anggap sudah selesai.\n\nCoba lagi: isi No. Shipment dan pilih fotonya lagi, lalu kirim. Kalau tetap gagal, hubungi admin.`);
-            }
-        }
-
-        // Khusus admin: kecilkan foto POD lama yang besar di dalam data transaksi.
-        async function kompresUlangFotoLama() {
-            if (!Array.isArray(transaksiData)) return;
-            const BATAS = 200000; // karakter data-URL (sekitar 150 kB)
-            const target = [];
-            transaksiData.forEach(it => {
-                if (!it || typeof it !== 'object') return;
-                Object.keys(it).forEach(k => {
-                    const v = it[k];
-                    if (typeof v === 'string' && v.startsWith('data:image') && v.length > BATAS) target.push([it, k]);
-                });
-            });
-            const sebelum = (localStorage.getItem('gudang_transaksi') || '').length;
-            if (!target.length) { alert('Tidak ada foto besar yang perlu dikecilkan.'); return; }
-            if (!confirm(`Ditemukan ${target.length} foto besar. Ukuran data transaksi sekarang sekitar ${(sebelum/1048576).toFixed(1)} MB.\n\nFoto akan dikecilkan lalu data ditimpa ke server.\n\nPASTIKAN:\n1) Sudah backup tabel app_store di Supabase\n2) Tidak ada driver yang sedang upload\n3) Batas statement_timeout Supabase sudah dinaikkan\n\nLanjutkan?`)) return;
-            let n = 0;
-            for (const [it, k] of target) {
-                const kecil = await new Promise(res => kompresFotoPOD(it[k], res));
-                if (kecil && kecil.length < it[k].length) { it[k] = kecil; n++; }
-            }
-            localStorage.setItem('gudang_transaksi', JSON.stringify(transaksiData));
-            const sesudah = localStorage.getItem('gudang_transaksi').length;
-            let ok = false;
-            try {
-                clearTimeout(timers['gudang_transaksi']); timers['gudang_transaksi'] = null;
-                await kirimKeServer('gudang_transaksi');
-                ok = (lastSynced['gudang_transaksi'] === localStorage.getItem('gudang_transaksi'));
-            } catch (e) { ok = false; }
-            alert(ok
-                ? `Selesai. ${n} foto dikecilkan.\nUkuran data: ${(sebelum/1048576).toFixed(1)} MB menjadi ${(sesudah/1048576).toFixed(1)} MB. Tersimpan di server.`
-                : `Foto sudah dikecilkan di browser ini (${(sebelum/1048576).toFixed(1)} MB menjadi ${(sesudah/1048576).toFixed(1)} MB) TETAPI gagal disimpan ke server.\nNaikkan statement_timeout di Supabase lalu jalankan tombol ini lagi.`);
-        }
-
-        // Perkecil foto POD (maks 1280px, JPEG 70%) supaya data transaksi tidak membengkak.
-        // Bila gagal / hasilnya tidak lebih kecil, foto asli dipakai.
-        function kompresFotoPOD(dataUrl, cb) {
-            try {
-                const img = new Image();
-                img.onload = function() {
-                    try {
-                        const MAX = 1280;
-                        const r = Math.min(1, MAX / Math.max(img.width, img.height));
-                        const c = document.createElement('canvas');
-                        c.width = Math.round(img.width * r);
-                        c.height = Math.round(img.height * r);
-                        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-                        const hasil = c.toDataURL('image/jpeg', 0.7);
-                        cb(hasil.length < dataUrl.length ? hasil : dataUrl);
-                    } catch (e) { cb(dataUrl); }
-                };
-                img.onerror = function() { cb(dataUrl); };
-                img.src = dataUrl;
-            } catch (e) { cb(dataUrl); }
-        }
 
         function updateStatistikUI() {
             totalSJ = transaksiData.length;
@@ -6150,24 +6283,12 @@
             const elBK = document.getElementById('statBelumKembali');
             const elDP = document.getElementById('statDalamPengantaran');
 
-            // Kartu di menu Surat Jalan Keluar mengikuti Filter Tanggal (tanggal kirim); kosong = semua data
-            const fs = (document.getElementById('keluarStart') || {}).value || '';
-            const fe = (document.getElementById('keluarEnd') || {}).value || '';
-            const tampil = transaksiData.filter(item => {
-                if (!fs && !fe) return true;
-                const t = cleanDateOnly(item.tgl_kirim || item.tgl_kirim_raw);
-                if (fs && t < fs) return false;
-                if (fe && t > fe) return false;
-                return true;
-            });
-            const raceSet = new Set();
-            tampil.forEach(item => raceSet.add(`${item.tgl_kirim_raw}_${item.driver}_${item.race}`));
-
-            if (elSJ) elSJ.innerText = tampil.length;
-            if (elRace) elRace.innerText = raceSet.size;
-            if (elDO) elDO.innerText = tampil.reduce((sum, item) => sum + (parseInt(item.total) || 0), 0);
-            if (elBK) elBK.innerText = tampil.filter(item => !isDokOK(item)).length;
-            if (elDP) elDP.innerText = tampil.filter(isDalamPengantaran).length;
+            if (elSJ) elSJ.innerText = totalSJ;
+            if (elRace) elRace.innerText = hitungTotalRaceUnique();
+            if (elDO) elDO.innerText = totalDO;
+            if (elBK) elBK.innerText = belumKembali;
+            if (elDP) elDP.innerText = transaksiData.filter(isDalamPengantaran).length;
+            try { muatOSFreegood(); } catch (e) {}
         }
 
         // Initial render database viewer/status
@@ -6181,6 +6302,7 @@
             try { muatDataOSGISO(); } catch (e) {}
             try { muatDataStatusPesanan(); } catch (e) {}
             try { muatDataOutstanding(); } catch (e) {}
+            try { muatOSFreegood(); } catch (e) {}
         }, 150);
 
 
@@ -6834,198 +6956,56 @@
             let ctxLead = document.getElementById('chartLeadTime');
             if (ctxLead) {
                 if (chartLeadTimeInstance) chartLeadTimeInstance.destroy();
-                const perTgl = {};
-                filtered.forEach(item => {
-                    const t = cleanDateOnly(item.tgl_kirim || item.tgl_kirim_raw);
-                    const lt = parseInt(item.leadTimeVal);
-                    if (!t || isNaN(lt)) return;
-                    if (!perTgl[t]) perTgl[t] = { sum: 0, n: 0 };
-                    perTgl[t].sum += lt; perTgl[t].n += 1;
-                });
-                const tglList = Object.keys(perTgl).sort();
-                const nilai = tglList.map(t => +(perTgl[t].sum / perTgl[t].n).toFixed(1));
-                const rataPeriode = nilai.length ? +(nilai.reduce((a, b) => a + b, 0) / nilai.length).toFixed(1) : 0;
-                // status tiap titik: 'tajam' (merah) | 'naik' (oranye) | ''
-                const status = nilai.map((v, i) => {
-                    if (i === 0) return '';
-                    const prev3 = nilai.slice(Math.max(0, i - 3), i);
-                    const avg3 = prev3.reduce((a, b) => a + b, 0) / prev3.length;
-                    if (v >= avg3 + 1 && v >= avg3 * 1.25) return 'tajam';
-                    if (v > nilai[i - 1]) return 'naik';
-                    return '';
-                });
-                const warna = st => st === 'tajam' ? '#dc2626' : st === 'naik' ? '#f59e0b' : '#4361ee';
-                const tandaLead = {
-                    id: 'tandaLead',
-                    afterDatasetsDraw(chart) {
-                        const meta = chart.getDatasetMeta(0);
-                        const c = chart.ctx;
-                        c.save(); c.textAlign = 'center';
-                        nilai.forEach((v, i) => {
-                            const pt = meta.data[i]; if (!pt || !tglList.length) return;
-                            c.font = '600 11px sans-serif'; c.fillStyle = '#334155';
-                            c.fillText(v, pt.x, pt.y - (status[i] ? 26 : 12));
-                            if (status[i]) {
-                                c.font = 'bold 15px sans-serif'; c.fillStyle = warna(status[i]);
-                                c.fillText(status[i] === 'tajam' ? '\u26A0' : '\u25B2', pt.x, pt.y - 11);
-                            }
-                        });
-                        c.restore();
-                    }
-                };
                 chartLeadTimeInstance = new Chart(ctxLead, {
-                    type: 'line',
+                    type: 'bar',
                     data: {
-                        labels: tglList.length ? tglList.map(t => formatDateToDisplay(t)) : ['Tidak Ada Data'],
+                        labels: labels.length > 0 ? labels : ['Tidak Ada Data'],
                         datasets: [{
-                            label: 'Rata-rata lead time (hari)',
-                            data: tglList.length ? nilai : [0],
-                            borderColor: '#4361ee',
-                            borderWidth: 3,
-                            tension: 0.35,
-                            fill: true,
-                            backgroundColor: (ctx) => {
-                                const a = ctx.chart.chartArea; if (!a) return 'rgba(67,97,238,0.1)';
-                                const g = ctx.chart.ctx.createLinearGradient(0, a.top, 0, a.bottom);
-                                g.addColorStop(0, 'rgba(67,97,238,0.30)'); g.addColorStop(1, 'rgba(67,97,238,0.02)');
-                                return g;
-                            },
-                            pointRadius: status.map(st => st ? 7 : 5),
-                            pointHoverRadius: 9,
-                            pointBackgroundColor: status.map(st => st ? warna(st) : '#ffffff'),
-                            pointBorderColor: status.map(st => warna(st)),
-                            pointBorderWidth: 3
-                        }, {
-                            label: 'Rata-rata periode (' + rataPeriode + ' hari)',
-                            data: tglList.length ? nilai.map(() => rataPeriode) : [0],
-                            borderColor: '#94a3b8', borderDash: [6, 6], borderWidth: 1.5,
-                            pointRadius: 0, pointHoverRadius: 0, fill: false
+                            label: 'Rata-Rata Lead Time (Hari)',
+                            data: labels.length > 0 ? avgLeadTimeValues : [0],
+                            backgroundColor: 'rgba(220, 53, 69, 0.7)',
+                            borderColor: '#dc3545',
+                            borderWidth: 1
                         }]
                     },
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
-                        layout: { padding: { top: 30, right: 12 } },
-                        interaction: { mode: 'index', intersect: false },
                         plugins: {
-                            title: { display: true, text: 'Tren Rata-Rata Lead Time per Tanggal Kirim', font: { size: 15 } },
-                            subtitle: { display: true, text: '\u25B2 oranye = lebih tinggi dari hari sebelumnya   |   \u26A0 merah = naik tajam (\u2265 1 hari & \u2265 25% di atas rata-rata 3 tanggal sebelumnya)', padding: { bottom: 8 } },
-                            legend: { position: 'bottom', labels: { usePointStyle: true } },
-                            tooltip: {
-                                callbacks: {
-                                    label: c => c.datasetIndex === 0 ? ' Lead time: ' + c.parsed.y + ' hari' : ' ' + c.dataset.label,
-                                    afterLabel: c => {
-                                        if (c.datasetIndex !== 0 || c.dataIndex === 0) return '';
-                                        const d = +(nilai[c.dataIndex] - nilai[c.dataIndex - 1]).toFixed(1);
-                                        const st = status[c.dataIndex];
-                                        return (d > 0 ? '+' : '') + d + ' hari dari tanggal sebelumnya' + (st === 'tajam' ? '  \u26A0 NAIK TAJAM' : st === 'naik' ? '  \u25B2 naik' : '');
-                                    }
-                                }
-                            }
+                            title: { display: true, text: 'Rata-Rata Lead Time Pengiriman per Driver' }
                         },
                         scales: {
-                            x: { grid: { display: false } },
-                            y: { beginAtZero: true, grace: '15%', grid: { color: 'rgba(148,163,184,0.25)' }, title: { display: true, text: 'Hari' } }
+                            y: { beginAtZero: true }
                         }
-                    },
-                    plugins: [tandaLead]
+                    }
                 });
             }
 
             let ctxKoli = document.getElementById('chartKoli');
             if (ctxKoli) {
                 if (chartKoliInstance) chartKoliInstance.destroy();
-                const koliTgl = {};
-                filtered.forEach(item => {
-                    const t = cleanDateOnly(item.tgl_kirim || item.tgl_kirim_raw);
-                    if (!t) return;
-                    koliTgl[t] = (koliTgl[t] || 0) + (parseInt(item.total) || 0);
-                });
-                const tglK = Object.keys(koliTgl).sort();
-                const nilaiK = tglK.map(t => koliTgl[t]);
-                const rataK = nilaiK.length ? +(nilaiK.reduce((a, b) => a + b, 0) / nilaiK.length).toFixed(1) : 0;
-                const arahK = nilaiK.map((v, i) => i === 0 ? '' : (v > nilaiK[i - 1] ? 'naik' : (v < nilaiK[i - 1] ? 'turun' : '')));
-                const emojiOk = ch => {
-                    try {
-                        const mk = t => { const c = document.createElement('canvas'); c.width = 28; c.height = 28; const x = c.getContext('2d'); x.font = '22px sans-serif'; x.textBaseline = 'top'; x.fillText(t, 0, 0); return c.toDataURL(); };
-                        return mk(ch) !== mk('\uDBFF\uDFFE');
-                    } catch (e) { return true; }
-                };
-                const ikonNaik = '\uD83C\uDFD4\uFE0F';
-                const ikonTurun = emojiOk('\uD83D\uDEDD') ? '\uD83D\uDEDD' : '\uD83D\uDCC9';
-                const warnaK = a => a === 'naik' ? '#059669' : a === 'turun' ? '#8b5cf6' : '#10b981';
-                const tandaKoli = {
-                    id: 'tandaKoli',
-                    afterDatasetsDraw(chart) {
-                        const meta = chart.getDatasetMeta(0);
-                        const c = chart.ctx;
-                        c.save(); c.textAlign = 'center';
-                        nilaiK.forEach((v, i) => {
-                            const pt = meta.data[i]; if (!pt || !tglK.length) return;
-                            c.font = '600 11px sans-serif'; c.fillStyle = '#334155';
-                            c.fillText(v, pt.x, pt.y - (arahK[i] ? 30 : 12));
-                            if (arahK[i]) {
-                                c.font = '20px sans-serif'; c.fillText(arahK[i] === 'naik' ? ikonNaik : ikonTurun, pt.x, pt.y - 11);
-                            }
-                        });
-                        c.restore();
-                    }
-                };
                 chartKoliInstance = new Chart(ctxKoli, {
-                    type: 'line',
+                    type: 'bar',
                     data: {
-                        labels: tglK.length ? tglK.map(t => formatDateToDisplay(t)) : ['Tidak Ada Data'],
+                        labels: labels.length > 0 ? labels : ['Tidak Ada Data'],
                         datasets: [{
-                            label: 'Total koli / dus terkirim',
-                            data: tglK.length ? nilaiK : [0],
-                            borderColor: '#10b981',
-                            borderWidth: 3,
-                            tension: 0.35,
-                            fill: true,
-                            backgroundColor: (ctx) => {
-                                const a = ctx.chart.chartArea; if (!a) return 'rgba(16,185,129,0.1)';
-                                const g = ctx.chart.ctx.createLinearGradient(0, a.top, 0, a.bottom);
-                                g.addColorStop(0, 'rgba(16,185,129,0.30)'); g.addColorStop(1, 'rgba(16,185,129,0.02)');
-                                return g;
-                            },
-                            pointRadius: arahK.map(a => a ? 7 : 5),
-                            pointHoverRadius: 9,
-                            pointBackgroundColor: arahK.map(a => a ? warnaK(a) : '#ffffff'),
-                            pointBorderColor: arahK.map(a => warnaK(a)),
-                            pointBorderWidth: 3
-                        }, {
-                            label: 'Rata-rata periode (' + rataK + ' koli)',
-                            data: tglK.length ? nilaiK.map(() => rataK) : [0],
-                            borderColor: '#94a3b8', borderDash: [6, 6], borderWidth: 1.5,
-                            pointRadius: 0, pointHoverRadius: 0, fill: false
+                            label: 'Total Koli Dikirim',
+                            data: labels.length > 0 ? koliValues : [0],
+                            backgroundColor: 'rgba(67, 97, 238, 0.7)',
+                            borderColor: '#4361ee',
+                            borderWidth: 1
                         }]
                     },
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
-                        layout: { padding: { top: 34, right: 12 } },
-                        interaction: { mode: 'index', intersect: false },
                         plugins: {
-                            title: { display: true, text: 'Tren Total Koli Terkirim per Tanggal Kirim', font: { size: 15 } },
-                            subtitle: { display: true, text: ikonNaik + ' = lebih banyak dari hari sebelumnya   |   ' + ikonTurun + ' = lebih sedikit dari hari sebelumnya', padding: { bottom: 8 } },
-                            legend: { position: 'bottom', labels: { usePointStyle: true } },
-                            tooltip: {
-                                callbacks: {
-                                    label: c => c.datasetIndex === 0 ? ' Total: ' + c.parsed.y + ' koli' : ' ' + c.dataset.label,
-                                    afterLabel: c => {
-                                        if (c.datasetIndex !== 0 || c.dataIndex === 0) return '';
-                                        const d = nilaiK[c.dataIndex] - nilaiK[c.dataIndex - 1];
-                                        return (d > 0 ? '+' : '') + d + ' koli dari tanggal sebelumnya';
-                                    }
-                                }
-                            }
+                            title: { display: true, text: 'Total Koli Pengiriman per Driver' }
                         },
                         scales: {
-                            x: { grid: { display: false } },
-                            y: { beginAtZero: true, grace: '15%', grid: { color: 'rgba(148,163,184,0.25)' }, title: { display: true, text: 'Dus / Koli' } }
+                            y: { beginAtZero: true }
                         }
-                    },
-                    plugins: [tandaKoli]
+                    }
                 });
             }
         }
