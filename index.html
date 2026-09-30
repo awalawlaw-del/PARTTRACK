@@ -2,6 +2,12 @@
 <html lang="id">
 <head>
     <link rel="icon" type="image/png" href="logo.png">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="PartTrack">
+    <link rel="apple-touch-icon" href="icon-192.png">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Enterprise Warehouse & Logistics Monitoring System</title>
@@ -7287,6 +7293,14 @@
         document.addEventListener('shown.bs.tab', function () { setTimeout(atur_header_bertingkat, 120); });
         window.addEventListener('resize', atur_header_bertingkat);
         window.addEventListener('load', function () { setTimeout(atur_header_bertingkat, 600); });
+    </script>
+    <script>
+        // PWA: daftarkan service worker supaya aplikasi bisa di-install
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function () {
+                navigator.serviceWorker.register('sw.js').catch(function (e) { console.warn('SW gagal didaftarkan', e); });
+            });
+        }
     </script>
 </body>
 </html>
