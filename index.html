@@ -649,6 +649,20 @@
         /* kotak trend line rekap harian */
         #menu-rekap-harian .card-body > div[style*="height:300px"] { height:340px !important; padding:14px; border:2px solid var(--gz-ink); border-radius:18px; background:linear-gradient(180deg,#fff,#faf7ff); box-shadow:4px 4px 0 var(--gz-ink); }
         @media (prefers-reduced-motion:reduce) { .card:hover, .btn:hover { transform:none; } }
+
+        /* ===== TABEL VERSI SOFT (pastel) ===== */
+        .table-responsive { border:1px solid #e6defc !important; border-radius:16px !important; box-shadow:0 6px 18px rgba(124,58,237,.08) !important; }
+        .table-responsive > .table > thead > tr > th, #menu-status-pesanan thead th, #menu-approval-dealer thead th, .table thead.table-light th {
+            background:linear-gradient(135deg,#ece6ff 0%,#fde4f0 100%) !important; color:#4c1d95 !important;
+            border-color:rgba(124,58,237,.10) !important; box-shadow:inset 0 -2px 0 #d8ccff !important;
+            font-weight:700 !important; font-size:.8rem !important; padding:12px 10px !important;
+        }
+        .table > tbody > tr > td { border-color:#f1ecff !important; color:#475569; }
+        .table-striped > tbody > tr:nth-of-type(odd) > * { --bs-table-bg-type:#fcfbff !important; }
+        .table tbody tr:hover, #menu-status-pesanan tbody tr:hover { background:#f6f1ff !important; }
+        .table tbody td:first-child { color:#5b21b6; }
+        .table-active, .table-active > td { --bs-table-bg:#fff6dd !important; --bs-table-active-bg:#fff6dd !important; background:#fff6dd !important; color:#78350f !important; }
+        #menu-rekap-harian .card-body > div[style*="height:300px"] { border:1px solid #e6defc !important; box-shadow:0 6px 18px rgba(124,58,237,.08) !important; }
     </style>
 
 </head>
@@ -2655,6 +2669,17 @@
             }
         } catch (e) {
             console.error('Boot gagal', e);
+            // Sesi kedaluwarsa (JWT expired / token tidak valid): bersihkan sesi lama lalu tampilkan halaman login.
+            const pesanErr = String((e && (e.message || e.error_description)) || '').toLowerCase();
+            const sesiRusak = /jwt|refresh token|invalid token|not authenticated/.test(pesanErr) || (e && (e.status === 401 || e.code === 'PGRST301'));
+            if (sesiRusak && !sessionStorage.getItem('sb_sesi_dibersihkan')) {
+                sessionStorage.setItem('sb_sesi_dibersihkan', '1');
+                try { await sb.auth.signOut({ scope: 'local' }); } catch (x) {}
+                try { Object.keys(localStorage).filter(k => /^sb-/.test(k)).forEach(k => localStorage.removeItem(k)); } catch (x) {}
+                hapusSesiLokal();
+                location.reload();
+                return;
+            }
             sembunyiSplash();
             sbTampilkanError('Tidak bisa terhubung ke server', 'Periksa koneksi internet lalu coba lagi.\n' + (e && e.message ? e.message : ''), true);
             return;
@@ -2664,6 +2689,7 @@
             if (ev === 'SIGNED_OUT' && window.__SB_PROFILE) { hapusSesiLokal(); location.reload(); }
         });
 
+        sessionStorage.removeItem('sb_sesi_dibersihkan');
         jalankanAplikasi();
         sembunyiSplash();
         if (login) {
