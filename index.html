@@ -1104,8 +1104,8 @@
                         <div class="card-header bg-white text-dark py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
                             <h5 class="mb-0 fw-bold"><i class="fas fa-file-alt text-primary me-2"></i>Laporan Pengiriman <span id="labelDealerSub" class="text-warning small"></span></h5>
                             <div class="d-flex gap-2 align-items-center flex-wrap">
-                                <input type="date" id="exportStart" class="form-control form-control-sm" style="width: 130px;">
-                                <input type="date" id="exportEnd" class="form-control form-control-sm" style="width: 130px;">
+                                <input type="date" id="exportStart" class="form-control form-control-sm" style="width: 130px;" onchange="currentPageLaporan=1;renderLaporanUlang()">
+                                <input type="date" id="exportEnd" class="form-control form-control-sm" style="width: 130px;" onchange="currentPageLaporan=1;renderLaporanUlang()">
                                 <button class="btn btn-success btn-sm fw-bold text-nowrap shadow-sm" onclick="eksporKeExcel()"><i class="fas fa-file-excel me-1"></i> Ekspor</button>
                                 <button class="btn btn-danger btn-sm fw-bold text-nowrap shadow-sm admin-only" style="display:none;" onclick="hapusLaporanByTanggal()" title="Hapus semua laporan sesuai rentang tanggal kirim (kolom tanggal awal & akhir di kiri)"><i class="fas fa-trash-alt me-1"></i> Hapus per Tanggal</button>
                             </div>
@@ -2554,7 +2554,7 @@
         gudang_db_status_pesanan: v => { databaseStatusPesananRaw = v || []; },
         gudang_db_sp: v => { databaseSP = v || {}; },
         gudang_shipment_terinput: v => { shipmentTerinput = v || []; },
-        gudang_transaksi: v => { transaksiData = v || []; },
+        gudang_transaksi: v => { transaksiData = v || []; try { shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; } catch (e) {} },
         gudang_pengembalian_sj: v => { pengembalianSJList = v || []; },
         gudang_total_sj: v => { totalSJ = parseInt(v) || 0; },
         gudang_total_do: v => { totalDO = parseInt(v) || 0; },
@@ -2734,7 +2734,7 @@
         const rowsPerPage = 25;
 
         let persistentSession = JSON.parse(localStorage.getItem('gudang_persistent_session')) || {
-            tgl_kirim: new Date().toISOString().split('T')[0],
+            tgl_kirim: getTanggalHariIniLocal(),
             driver: "",
             race: 1
         };
@@ -3812,7 +3812,7 @@
 
         updateApprovalBadge();
 
-        document.getElementById('global_tgl_kirim').value = persistentSession.tgl_kirim || new Date().toISOString().split('T')[0];
+        document.getElementById('global_tgl_kirim').value = persistentSession.tgl_kirim || getTanggalHariIniLocal();
         document.getElementById('global_driver').value = persistentSession.driver || "";
         segarkanPilihanPlat('global_plat', persistentSession.plat || "");
         document.getElementById('global_race').value = persistentSession.race || 1;
@@ -3838,9 +3838,9 @@
             localStorage.setItem('gudang_persistent_session', JSON.stringify(persistentSession));
         });
 
-        let todayStr = new Date().toISOString().split('T')[0];
-        document.getElementById('exportStart').value = todayStr;
-        document.getElementById('exportEnd').value = todayStr;
+        let todayStr = getTanggalHariIniLocal();
+        document.getElementById('exportStart').value = '';
+        document.getElementById('exportEnd').value = '';
         document.getElementById('filterStart').value = todayStr;
         document.getElementById('filterEnd').value = todayStr;
 
@@ -3854,6 +3854,7 @@
         let databaseSP = JSON.parse(localStorage.getItem('gudang_db_sp')) || {};
         let shipmentTerinput = JSON.parse(localStorage.getItem('gudang_shipment_terinput')) || [];
         let transaksiData = JSON.parse(localStorage.getItem('gudang_transaksi')) || [];
+shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber kebenaran = transaksiData
         let pengembalianSJList = JSON.parse(localStorage.getItem('gudang_pengembalian_sj')) || [];
 
         let totalSJ = parseInt(localStorage.getItem('gudang_total_sj')) || 0;
@@ -4657,7 +4658,7 @@
             if (!item || !item._uploadedAt) return "";
             const d = new Date(Number(item._uploadedAt));
             if (isNaN(d.getTime())) return "";
-            return d.toISOString().split("T")[0];
+            return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
         }
 
         function deleteDatabaseItem(type, key) {
@@ -5274,7 +5275,12 @@
                 data = data.filter(i => i.nama_dealer.toLowerCase().includes(currentDealer.toLowerCase()));
             }
 
-            let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase();
+            const _tglA = (document.getElementById('exportStart') || {}).value || '';
+const _tglB = (document.getElementById('exportEnd') || {}).value || '';
+if (_tglA || _tglB) {
+    data = data.filter(i => { const d = cleanDateOnly(i.tgl_kirim_raw || i.tgl_kirim); if (!d) return false; if (_tglA && d < _tglA) return false; if (_tglB && d > _tglB) return false; return true; });
+}
+let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase();
             if (keyword) {
                 data = data.filter(i => 
                     String(i.no_faktur || "").toLowerCase().includes(keyword) || 
@@ -5515,7 +5521,7 @@
             let ws = XLSX.utils.json_to_sheet(dataExport);
             let wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, "Status Pesanan");
-            XLSX.writeFile(wb, `Laporan_Status_Pesanan_${new Date().toISOString().split('T')[0]}.xlsx`);
+            XLSX.writeFile(wb, `Laporan_Status_Pesanan_${getTanggalHariIniLocal()}.xlsx`);
         }
 
         function renderLaporanUlang() {
@@ -6422,7 +6428,9 @@
             let shipmentVal = document.getElementById('shipment').value.trim();
             if (!shipmentVal) return;
 
-            if (shipmentTerinput.includes(shipmentVal)) {
+            const _sudahAda = transaksiData.some(t => dbKey(t.shipment) === dbKey(shipmentVal));
+if (!_sudahAda) { shipmentTerinput = shipmentTerinput.filter(s => dbKey(s) !== dbKey(shipmentVal)); }
+if (_sudahAda) {
                 alert(`Surat Jalan / Shipment ${shipmentVal} sudah pernah diinput sebelumnya!`);
                 return;
             }
@@ -6530,6 +6538,8 @@
             }
 
             updateStatistikUI();
+            try { renderLaporanUlang(); } catch (e) {}
+            try { muatDataOutstanding(); } catch (e) {}
             alert(`Surat Jalan ${shipmentVal} berhasil ditambahkan!`);
             document.getElementById('shipment').focus();
         });
