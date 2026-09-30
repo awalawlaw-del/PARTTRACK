@@ -1947,7 +1947,9 @@
                     <h5 class="modal-title fw-bold"><i class="fas fa-map-marked-alt text-primary me-2"></i><span id="judulPetaLive">Live Lokasi Driver</span></h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-                <div class="modal-body p-0" oncontextmenu="return false;">
+                <div class="modal-body p-0" oncontextmenu="return false;" style="position:relative;">
+                    <!-- Penutup checkbox "Info" milik peta (pojok kanan atas, di kiri "Ikuti"). Atur posisi lewat right/top/width/height bila kurang pas. -->
+                    <div id="penutupInfoPeta" style="position:absolute; z-index:5; right:160px; top:9px; width:40px; height:28px; background:#fff;"></div>
                     <iframe id="framePetaLive" title="Live Lokasi" style="width:100%; height:70vh; border:0;" referrerpolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-forms"></iframe>
                 </div>
                 <div class="modal-footer justify-content-between">
@@ -5409,7 +5411,7 @@
                     liveLokasiSection = `
                         <div class="alert alert-primary mb-3">
                             <h6 class="fw-bold mb-2"><i class="fas fa-satellite-dish me-2"></i>Armada Astra Sedang Dalam Perjalanan</h6>
-                            <p class="small text-muted mb-3">Live Lokasi GPS Driver <strong>${item.driver}</strong> aktif dan dapat dipantau.</p>
+                            <div class="mb-3"></div>
                             <button type="button" class="btn btn-primary btn-lg fw-bold px-4 shadow" onclick="bukaPetaLive('${item.shipment}')">
                                 <i class="fas fa-map-marked-alt me-2"></i> Buka Peta Live Lokasi Driver
                             </button>
@@ -5671,7 +5673,7 @@
 
             const tampil = () => {
                 _petaLinkAktif = link;
-                document.getElementById("judulPetaLive").innerText = `Live Lokasi ${item.driver || ""} - ${item.shipment}`;
+                document.getElementById("judulPetaLive").innerText = `CEK LOKASI ARMADA ASTRA - ${item.shipment}`;
                 document.getElementById("btnPetaTabBaru").style.display = (currentRole === "admin" || currentRole === "warehouse") ? "inline-block" : "none";
                 frame.src = link;
                 bootstrap.Modal.getOrCreateInstance(mapEl).show();
