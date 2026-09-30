@@ -1305,6 +1305,7 @@
                                     <thead class="table-dark">
                                         <tr>
                                             <th>No. Delivery</th>
+                                            <th>No. Shipment</th>
                                             <th>Kode BA</th>
                                             <th>Tanggal GI</th>
                                             <th>Status Bukti Tanda Terima</th>
@@ -5011,6 +5012,7 @@
 
             tbody.innerHTML=page.length?page.map(x=>{
                 const delivery=dbText(x.no_delivery||x._key);
+                const shipment=dbText(x.shipment||"-");
                 const kodeBA=dbText(x.kode_ba||"-");
                 const tglGI=formatDateToDisplay(x.tgl_gi||getUploadedDate(x));
                 const bukti=x.bukti||x.podFoto||"";
@@ -5018,6 +5020,7 @@
                 const badge=bukti ? "bg-success" : "bg-warning text-dark";
                 return `<tr>
                     <td class="fw-bold">${dbSafe(delivery)}</td>
+                    <td>${dbSafe(shipment)}</td>
                     <td>${dbSafe(kodeBA)}</td>
                     <td>${dbSafe(tglGI)}</td>
                     <td>
@@ -5026,7 +5029,7 @@
                     </td>
                     <td><button class="btn btn-sm btn-outline-danger" onclick="deleteDatabaseItem('GISO', ${JSON.stringify(x._key)})"><i class="fas fa-trash"></i></button></td>
                 </tr>`;
-            }).join(""):`<tr><td colspan="5" class="empty-state"><i class="fas fa-tasks d-block"></i>Tidak ada data OS GI SO.</td></tr>`;
+            }).join(""):`<tr><td colspan="6" class="empty-state"><i class="fas fa-tasks d-block"></i>Tidak ada data OS GI SO.</td></tr>`;
 
             document.getElementById("badgeGISO").innerText=data.length;
             renderPager("paginationNavGISO","paginationInfoGISO",data.length,currentPageGISO,"ubahHalamanGISO");
