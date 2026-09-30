@@ -3806,7 +3806,7 @@
                 aktifkanTabAwal('#menu-laporan-bulanan');
                 if (!document.getElementById('btnKompresLama')) {
                     const bk = document.createElement('button'); bk.id = 'btnKompresLama'; bk.className = 'btn btn-sm btn-outline-warning ms-2';
-                    bk.textContent = 'Kompres Foto Lama'; bk.onclick = kompresFotoLama;
+                    bk.textContent = 'Pindahkan Foto ke Storage'; bk.onclick = pindahkanFotoKeStorage;
                     document.getElementById('userRoleBadge').insertAdjacentElement('afterend', bk);
                 }
             } else if (currentRole === 'driver') {
@@ -5797,9 +5797,9 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
             let fotoSection = item.podFoto ? `
                 <hr class="my-3">
                 <h6 class="fw-bold text-success mb-2"><i class="fas fa-camera me-1"></i> Bukti Foto Serah Terima (POD)</h6>
-                <img src="${item.podFoto}" class="img-fluid rounded border mb-3 shadow-sm" style="max-height: 350px;">
+                <img loading="lazy" src="${item.podFoto}" class="img-fluid rounded border mb-3 shadow-sm" style="max-height: 350px;">
                 <div>
-                    <a href="${item.podFoto}" class="btn btn-success fw-bold px-4 shadow-sm" download="POD_${item.shipment}.jpg">
+                    <a href="${urlUnduhFoto(item)}" class="btn btn-success fw-bold px-4 shadow-sm" download="POD_${item.shipment}.jpg" target="_blank" rel="noopener">
                         <i class="fas fa-download me-1"></i> Download Foto
                     </a>
                 </div>
@@ -5893,7 +5893,7 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
             let paginatedData = filtered.slice(startIndex, endIndex);
 
             paginatedData.forEach(item => {
-                let badgePOD = item.podFoto ? `<img src="${item.podFoto}" class="pod-thumbnail shadow-sm" onclick="klikShipmentLaporan('${item.shipment}')" style="width:45px; height:45px; object-fit:cover; border-radius:5px; cursor:pointer;" title="Klik untuk Lihat">` : '<span class="badge bg-secondary">Belum Upload</span>';
+                let badgePOD = item.podFoto ? `<img loading="lazy" src="${item.podFoto}" class="pod-thumbnail shadow-sm" onclick="klikShipmentLaporan('${item.shipment}')" style="width:45px; height:45px; object-fit:cover; border-radius:5px; cursor:pointer;" title="Klik untuk Lihat">` : '<span class="badge bg-secondary">Belum Upload</span>';
                 tbody.innerHTML += `
                     <tr>
                         <td>${formatDateToDisplay(item.tgl_kirim)}</td>
@@ -6633,19 +6633,46 @@ if (_sudahAda) {
             });
         }
 
-        async function kompresFotoLama() {
-            const berat = transaksiData.filter(t => t.podFoto && t.podFoto.length > 250000);
-            if (!berat.length) { alert('Tidak ada foto besar. Semua foto sudah ringan.'); return; }
-            if (!confirm('Ada ' + berat.length + ' foto besar. Kompres sekarang? (Tunggu sampai muncul pesan selesai.)')) return;
-            let ok = 0, sebelum = 0, sesudah = 0;
-            for (const t of berat) {
-                sebelum += t.podFoto.length;
-                try { const k = await kompresFoto(t.podFoto); if (k.length < t.podFoto.length) { t.podFoto = k; ok++; } } catch (e) {}
-                sesudah += t.podFoto.length;
+        // ===== Foto POD disimpan di Supabase Storage (bucket 'pod-foto'); di database hanya tersimpan link-nya =====
+        function acakHex(n) {
+            const b = new Uint8Array(n); crypto.getRandomValues(b);
+            return Array.from(b, x => x.toString(16).padStart(2, '0')).join('');
+        }
+        async function unggahFotoStorage(dataUrl, shipment) {
+            if (typeof sb === 'undefined' || !sb) throw new Error('Koneksi Supabase belum siap');
+            const blob = await (await fetch(dataUrl)).blob();
+            const nama = String(shipment || 'x').replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 40);
+            const path = new Date().toISOString().slice(0, 7) + '/' + nama + '_' + acakHex(12) + '.jpg';
+            const up = await sb.storage.from('pod-foto').upload(path, blob, { contentType: 'image/jpeg', cacheControl: '31536000', upsert: false });
+            if (up.error) throw new Error(up.error.message || 'Upload foto gagal');
+            return sb.storage.from('pod-foto').getPublicUrl(path).data.publicUrl;
+        }
+        function urlUnduhFoto(item) {
+            const u = String(item.podFoto || '');
+            return /^https?:/i.test(u) ? u + (u.includes('?') ? '&' : '?') + 'download=' + encodeURIComponent('POD_' + item.shipment + '.jpg') : u;
+        }
+
+        async function pindahkanFotoKeStorage() {
+            const lama = transaksiData.filter(t => t.podFoto && String(t.podFoto).startsWith('data:'));
+            if (!lama.length) { alert('Tidak ada foto lama. Semua foto sudah ada di Storage.'); return; }
+            if (!confirm('Ada ' + lama.length + ' foto lama di database. Pindahkan ke Storage sekarang?\n\nTunggu sampai muncul pesan selesai dan banner merah hilang. Jangan tutup halaman.')) return;
+            const btn = document.getElementById('btnKompresLama');
+            let ok = 0, gagal = 0, sejakSimpan = 0, pesanGagal = '';
+            for (let i = 0; i < lama.length; i++) {
+                const t = lama[i];
+                if (btn) { btn.disabled = true; btn.textContent = 'Memindahkan ' + (i + 1) + '/' + lama.length + '...'; }
+                try {
+                    let d = t.podFoto;
+                    if (d.length > 200000) d = await kompresFoto(d);
+                    t.podFoto = await unggahFotoStorage(d, t.shipment);   // diganti HANYA bila upload berhasil
+                    ok++; sejakSimpan++;
+                } catch (e) { gagal++; pesanGagal = (e && e.message) || String(e); console.error('Pindah foto gagal', t.shipment, e); }
+                if (sejakSimpan >= 20) { localStorage.setItem('gudang_transaksi', JSON.stringify(transaksiData)); sejakSimpan = 0; }
             }
             localStorage.setItem('gudang_transaksi', JSON.stringify(transaksiData));
+            if (btn) { btn.disabled = false; btn.textContent = 'Pindahkan Foto ke Storage'; }
             try { renderLaporanUlang(); } catch (e) {}
-            alert(ok + ' foto dikompres: ' + (sebelum / 1048576).toFixed(1) + ' MB menjadi ' + (sesudah / 1048576).toFixed(1) + ' MB. Tunggu banner merah hilang sebelum menutup halaman.');
+            alert(ok + ' foto berhasil dipindahkan.' + (gagal ? '\n' + gagal + ' foto gagal (foto tetap aman di tempat lama). Alasan terakhir: ' + pesanGagal + '\nJalankan tombol ini lagi untuk mencoba ulang.' : '') + '\n\nTunggu banner merah hilang sebelum menutup halaman.');
         }
 
         document.getElementById('formDriverPOD').addEventListener('submit', function(e) {
@@ -6661,23 +6688,34 @@ if (_sudahAda) {
             }
 
             let file = fileInput.files[0];
-            kompresFoto(file).then(function(hasilFoto) {
-                item.podFoto = hasilFoto;
-                item.pod_at = Date.now();
-                item.status = 'OK';
-                if (!pengembalianSJList.includes(ship)) pengembalianSJList.push(ship);
-                belumKembali = Math.max(0, belumKembali - 1);
+            const tombol = this.querySelector('button[type="submit"]');
+            const teksTombol = tombol ? tombol.innerHTML : '';
+            if (tombol) { if (tombol.disabled) return; tombol.disabled = true; tombol.textContent = 'Mengunggah foto...'; }
+            (async function() {
+                try {
+                    const kecil = await kompresFoto(file);
+                    const urlFoto = await unggahFotoStorage(kecil, ship);
+                    item.podFoto = urlFoto;
+                    item.pod_at = Date.now();
+                    item.status = 'OK';
+                    if (!pengembalianSJList.includes(ship)) pengembalianSJList.push(ship);
+                    belumKembali = Math.max(0, belumKembali - 1);
 
-                localStorage.setItem('gudang_transaksi', JSON.stringify(transaksiData));
-                localStorage.setItem('gudang_pengembalian_sj', JSON.stringify(pengembalianSJList));
-                localStorage.setItem('gudang_belum_kembali', belumKembali);
+                    localStorage.setItem('gudang_transaksi', JSON.stringify(transaksiData));
+                    localStorage.setItem('gudang_pengembalian_sj', JSON.stringify(pengembalianSJList));
+                    localStorage.setItem('gudang_belum_kembali', belumKembali);
 
-                document.getElementById('driverShipment').value = "";
-                fileInput.value = "";
-                muatTabelDriverPOD();
-                updateStatistikUI();
-                alert(`Bukti foto tanda terima (POD) untuk shipment ${ship} berhasil di-upload!`);
-            }).catch(function(err) { alert('Foto gagal diproses, coba pilih ulang: ' + (err && err.message ? err.message : err)); });
+                    document.getElementById('driverShipment').value = "";
+                    fileInput.value = "";
+                    muatTabelDriverPOD();
+                    updateStatistikUI();
+                    alert(`Bukti foto tanda terima (POD) untuk shipment ${ship} berhasil di-upload!`);
+                } catch (err) {
+                    alert('Foto GAGAL di-upload, status belum berubah. Coba lagi.\n' + (err && err.message ? err.message : err));
+                } finally {
+                    if (tombol) { tombol.disabled = false; tombol.innerHTML = teksTombol; }
+                }
+            })();
         });
 
         function updateStatistikUI() {
