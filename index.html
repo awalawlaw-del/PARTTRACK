@@ -575,6 +575,20 @@
         #bootSplash .ring { width:46px; height:46px; border-radius:50%; border:4px solid #dfe5fb; border-top-color:#4361ee; animation:ringSpin .8s linear infinite; }
         @keyframes ringSpin { to { transform:rotate(360deg); } }
         #bootSplash .txt { font-weight:600; font-size:.95rem; letter-spacing:.2px; }
+
+        /* ===== FREEZE JUDUL KOLOM TABEL (tetap terlihat saat di-scroll) ===== */
+        .table-responsive {
+            max-height: calc(100vh - 240px);
+            min-height: 120px;
+            overflow: auto;
+        }
+        .table-responsive > .table > thead > tr > th {
+            position: sticky;
+            top: var(--th-top, 0px);
+            z-index: 3;
+            box-shadow: inset 0 -1px 0 #26324a, inset -1px 0 0 rgba(255,255,255,.06);
+        }
+        .table-responsive > .table > thead.table-light > tr > th { box-shadow: inset 0 -1px 0 #cbd5e1; }
     </style>
 
 </head>
@@ -825,6 +839,7 @@
                     <p class="text-muted small mb-0" id="subHeaderInfo">Sistem terintegrasi laporan SAP & Kontrol Surat Jalan Gudang</p>
                 </div>
                 <div class="d-flex align-items-center gap-2">
+                    <button id="btnNotifSuara" class="inbox-btn" type="button" onclick="klikPengaturanNotif()" style="display:none;" title="Pengaturan suara notifikasi"><i class="fas fa-bell"></i></button>
                     <button id="btnInboxHeader" class="inbox-btn" type="button" onclick="bukaInbox()" style="display:none;">
                         <i class="fas fa-inbox me-1"></i> Inbox
                         <span id="badgeInbox" class="badge bg-danger inbox-badge" style="display:none;">0</span>
@@ -1649,7 +1664,7 @@
                             </div>
 
                             <h6 class="fw-bold text-secondary mb-2 mt-4">Rincian Harian</h6>
-                            <div class="small text-muted mb-2">Per <b>Tanggal Kirim</b> (hanya tanggal yang ada data). <b>DO</b>, <b>DS</b>, <b>IK</b> = jumlah dus per kode kemasan; <b>Koli / SP / Lain</b> = kode kemasan selain DO/DS/IK (termasuk SP). Lead time tidak menghitung SP. <b>Outstanding</b> diisi sekali per tanggal di menu Surat Jalan Keluar.</div>
+                            <div class="small text-muted mb-2">Per <b>Tanggal Kirim</b> (hanya tanggal yang ada data). <b>DO</b>, <b>DS</b>, <b>IK</b> = jumlah dus per kode kemasan; <b>Lain</b> = kode kemasan selain DO/DS/IK. <b>Koli</b> (termasuk SP) dihitung sebagai DS; <b>D0</b> disatukan dengan <b>DO</b>. Lead time tidak menghitung SP. <b>Outstanding</b> diisi sekali per tanggal di menu Surat Jalan Keluar.</div>
                             <div class="table-responsive">
                                 <table class="table table-bordered table-striped align-middle text-center mb-0" style="min-width:1200px;">
                                     <thead>
@@ -1662,7 +1677,7 @@
                                             <th rowspan="2">Jumlah Surat Jalan<br><span class="fw-normal">(termasuk SP)</span></th>
                                         </tr>
                                         <tr>
-                                            <th>DO</th><th>DS</th><th>IK</th><th>Koli / SP / Lain</th><th>Total</th>
+                                            <th>DO</th><th>DS</th><th>IK</th><th>Lain</th><th>Total</th>
                                             <th>HSO Tetap</th><th>HSO Tidak Tetap</th><th>Armada Lain (KGP/JNE)</th>
                                         </tr>
                                     </thead>
@@ -2230,7 +2245,7 @@
         if (typeof databaseDealerAccounts !== 'undefined') {   // aplikasi sudah berjalan → perbarui tampilan
             databaseDealerAccounts = dealers;
             databaseInternalAccounts = internals;
-            ['updateApprovalBadge', 'muatApprovalDealer', 'muatUserManagement'].forEach(fn => {
+            ['updateApprovalBadge', 'muatApprovalDealer', 'muatUserManagement', 'refreshInboxBadge'].forEach(fn => {
                 try { if (typeof window[fn] === 'function') window[fn](); } catch (e) {}
             });
         }
@@ -3178,7 +3193,7 @@
         // Notifikasi pengantaran dibentuk dari transaksiData yang sudah ada.
         // ============================================================
         function inboxAktif() {
-            return ['admin', 'driver', 'dealer'].includes(currentRole);
+            return ['admin', 'driver', 'dealer', 'warehouse', 'salespart'].includes(currentRole);
         }
 
         function getInboxStorageKey() {
@@ -3191,7 +3206,7 @@
         }
 
         function simpanInboxReadIds(ids) {
-            localStorage.setItem(getInboxStorageKey(), JSON.stringify([...new Set(ids)].slice(-500)));
+            localStorage.setItem(getInboxStorageKey(), JSON.stringify([...new Set(ids)].slice(-3000)));
         }
 
         function getTanggalHariIniLocal() {
@@ -3203,15 +3218,44 @@
             if (!inboxAktif()) return [];
             const today = getTanggalHariIniLocal();
             const list = [];
+            const JENDELA_MS = 7 * 86400000;   // notifikasi SJ baru / POD masuk tampil 7 hari
+            const sekarang = Date.now();
 
-            const deliveriesToday = (transaksiData || []).filter(item => {
-                return cleanDateOnly(item.tgl_kirim || item.tgl_kirim_raw || item.tanggal_kirim) === today;
-            });
+            const tglKirimItem = it => cleanDateOnly(it.tgl_kirim || it.tgl_kirim_raw || it.tanggal_kirim);
+            const tsFallback = it => { const t = tglKirimItem(it); const v = t ? new Date(t + 'T08:00:00').getTime() : 0; return isNaN(v) ? 0 : v; };
+            const tsBaruItem = it => Number(it.dibuat_at) || tsFallback(it);
+            const tsPodItem = it => Number(it.pod_at) || tsFallback(it);
+            const hariLewat = it => {
+                const t = tglKirimItem(it);
+                if (!t) return 0;
+                const d = Math.floor((new Date(today) - new Date(t)) / 86400000);
+                return isNaN(d) ? 0 : d;
+            };
+            const namaDealerItem = it => dbText(it.nama_dealer || it.nama_customer || 'Dealer');
+            const milikDealerIni = it => {
+                const cur = dbText(currentDealer).toLowerCase();
+                return !!cur && namaDealerItem(it).toLowerCase().includes(cur);
+            };
+
+            const deliveriesToday = (transaksiData || []).filter(item => tglKirimItem(item) === today);
+
+            // Surat Jalan lewat 3 hari belum kembali (admin & warehouse)
+            const tambahSJTelat = () => {
+                (transaksiData || []).filter(it => !isDokOK(it) && hariLewat(it) >= 3).slice(0, 200).forEach(it => {
+                    const shipment = dbText(it.shipment || it.no_sj || '-');
+                    list.push({
+                        id: `telat_${shipment}`, type: 'telat', title: 'Surat Jalan Belum Kembali',
+                        text: `Shipment ${shipment} (${namaDealerItem(it)}) sudah ${hariLewat(it)} hari belum kembali.`,
+                        detail: `Tgl kirim ${formatDateToDisplay(it.tgl_kirim)}${it.driver ? ` • Driver: ${it.driver}` : ''}${it.no_faktur ? ` • Faktur: ${it.no_faktur}` : ''}`,
+                        time: tglKirimItem(it) || today, unread: true
+                    });
+                });
+            };
 
             if (currentRole === 'admin') {
                 deliveriesToday.forEach(item => {
                     const shipment = dbText(item.shipment || item.no_sj || '-');
-                    const dealer = dbText(item.nama_dealer || item.nama_customer || 'Dealer');
+                    const dealer = namaDealerItem(item);
                     const id = `delivery_${today}_${shipment}`;
                     list.push({
                         id, type:'delivery', title:'Pengantaran Hari Ini',
@@ -3220,29 +3264,70 @@
                         time:item.tgl_kirim || today, unread:true
                     });
                 });
-                if (!deliveriesToday.length) {
+                // Pendaftaran akun (dealer / internal) yang menunggu persetujuan
+                try {
+                    getApprovalRows().filter(r => statusApprovalRow(r) === 'pending').forEach(r => {
+                        const a = r.account;
+                        list.push({
+                            id: `daftar_${r.src}_${dbText(a.username || a.customerNo)}_${dbText(a.createdAt)}`,
+                            type: 'approval', title: 'Pendaftaran Menunggu Persetujuan',
+                            text: `${dbText(a.dealerName || a.name || a.username)} mendaftar dan perlu di-approve.`,
+                            detail: `Username: ${dbText(a.username || '-')} • Buka menu Approval untuk memproses`,
+                            time: cleanDateOnly(a.createdAt) || today, unread: true
+                        });
+                    });
+                } catch (e) {}
+                tambahSJTelat();
+                if (!deliveriesToday.length && !list.length) {
                     list.push({id:`summary_${today}`, type:'info', title:'Monitoring Pengantaran', text:'Belum ada data pengantaran untuk hari ini.', detail:'Inbox akan diperbarui otomatis saat data pengiriman tersedia.', time:today, unread:true});
                 }
-            } else if (currentRole === 'dealer') {
-                const dealerKey = dbKey(currentDealer);
-                deliveriesToday.filter(item => dbKey(item.nama_dealer || item.nama_customer) === dealerKey).forEach(item => {
-                    const shipment = dbText(item.shipment || item.no_sj || '-');
-                    const id = `delivery_${today}_${shipment}_${dealerKey}`;
+            } else if (currentRole === 'warehouse') {
+                tambahSJTelat();
+                if (!list.length) {
+                    list.push({id:`summary_${today}_wh`, type:'info', title:'Tidak Ada SJ Terlambat', text:'Tidak ada surat jalan yang lewat 3 hari belum kembali.', detail:'Pemberitahuan muncul otomatis jika ada SJ yang terlambat.', time:today, unread:true});
+                }
+            } else if (currentRole === 'salespart') {
+                (transaksiData || []).filter(it => sekarang - tsBaruItem(it) <= JENDELA_MS).forEach(it => {
+                    const shipment = dbText(it.shipment || it.no_sj || '-');
                     list.push({
-                        id, type:'delivery', title:'Pengantaran Hari Ini',
-                        text:`Ada pengantaran hari ini menuju ${currentDealer}.`,
-                        detail:`Shipment ${shipment}${item.no_faktur ? ` • Faktur: ${item.no_faktur}` : ''}${item.expedisi ? ` • Ekspedisi: ${item.expedisi}` : ''}`,
-                        time:item.tgl_kirim || today, unread:true
+                        id: `sjbaru_${shipment}`, type: 'sjbaru', title: 'Surat Jalan Keluar Baru',
+                        text: `Shipment ${shipment} menuju ${namaDealerItem(it)} baru diinput.`,
+                        detail: `Tgl kirim ${formatDateToDisplay(it.tgl_kirim)}${it.expedisi ? ` • Ekspedisi: ${it.expedisi}` : ''}${it.no_faktur ? ` • Faktur: ${it.no_faktur}` : ''}`,
+                        time: tglKirimItem(it) || today, unread: true
                     });
                 });
                 if (!list.length) {
-                    list.push({id:`summary_${today}_${dealerKey}`, type:'info', title:'Tidak Ada Pengantaran Hari Ini', text:`Belum ada pengiriman yang terjadwal ke ${currentDealer} hari ini.`, detail:'Data akan diperbarui otomatis setelah database pengiriman diperbarui.', time:today, unread:true});
+                    list.push({id:`summary_${today}_sales`, type:'info', title:'Belum Ada Surat Jalan Baru', text:'Belum ada surat jalan keluar baru dalam 7 hari terakhir.', detail:'Pemberitahuan muncul otomatis saat surat jalan diinput.', time:today, unread:true});
+                }
+            } else if (currentRole === 'dealer') {
+                const dealerKey = dbKey(currentDealer);
+                const milik = (transaksiData || []).filter(milikDealerIni);
+                milik.filter(it => sekarang - tsBaruItem(it) <= JENDELA_MS).forEach(it => {
+                    const shipment = dbText(it.shipment || it.no_sj || '-');
+                    list.push({
+                        id: `sjbaru_${shipment}_${dealerKey}`, type: 'sjbaru', title: 'Surat Jalan Baru',
+                        text: `Surat Jalan ${shipment} menuju ${currentDealer} sudah diterbitkan.`,
+                        detail: `Tgl kirim ${formatDateToDisplay(it.tgl_kirim)}${it.no_faktur ? ` • Faktur: ${it.no_faktur}` : ''}${it.expedisi ? ` • Ekspedisi: ${it.expedisi}` : ''}`,
+                        time: tglKirimItem(it) || today, unread: true
+                    });
+                });
+                milik.filter(it => it.podFoto && sekarang - tsPodItem(it) <= JENDELA_MS).forEach(it => {
+                    const shipment = dbText(it.shipment || it.no_sj || '-');
+                    list.push({
+                        id: `pod_${shipment}_${dealerKey}`, type: 'pod', title: 'Foto POD Sudah Masuk',
+                        text: `Bukti serah terima untuk Surat Jalan ${shipment} sudah di-upload driver.`,
+                        detail: 'Buka Laporan Pengiriman lalu klik nomor surat jalan untuk melihat fotonya.',
+                        time: tglKirimItem(it) || today, unread: true
+                    });
+                });
+                if (!list.length) {
+                    list.push({id:`summary_${today}_${dealerKey}`, type:'info', title:'Belum Ada Pemberitahuan', text:`Belum ada surat jalan baru atau foto POD untuk ${currentDealer}.`, detail:'Data akan diperbarui otomatis setelah ada pengiriman.', time:today, unread:true});
                 }
             } else if (currentRole === 'driver') {
                 const userKey = dbKey(currentUsername);
                 deliveriesToday.filter(item => dbKey(item.driver) === userKey || dbKey(item.driver).includes(userKey)).forEach(item => {
                     const shipment = dbText(item.shipment || item.no_sj || '-');
-                    const dealer = dbText(item.nama_dealer || item.nama_customer || 'Dealer');
+                    const dealer = namaDealerItem(item);
                     const id = `delivery_${today}_${shipment}_${userKey}`;
                     list.push({
                         id, type:'delivery', title:'Tugas Pengantaran Hari Ini',
@@ -3270,6 +3355,132 @@
             const unread = getInboxNotifications().filter(x => x.unread).length;
             badge.innerText = unread > 99 ? '99+' : unread;
             badge.style.display = unread ? 'flex' : 'none';
+            const btnSuara = document.getElementById('btnNotifSuara');
+            if (btnSuara) { btnSuara.style.display = 'inline-flex'; perbaruiTombolNotif(); }
+            try { cekNotifikasiBaru(); } catch (e) { console.warn('notif', e); }
+            if (!window._pollNotifJalan) {
+                window._pollNotifJalan = true;
+                setInterval(() => { try { refreshInboxBadge(); } catch (e) {} }, 20000);
+            }
+        }
+
+        // ============================================================
+        // POPUP + SUARA + NOTIFIKASI BROWSER untuk pemberitahuan baru
+        // ============================================================
+        const NOTIF_TIPE_POPUP = ['sjbaru', 'pod', 'telat', 'approval'];
+        let _audioCtx = null;
+
+        function notifPref() {
+            try { return Object.assign({ sound: true }, JSON.parse(localStorage.getItem('gudang_notif_pref')) || {}); }
+            catch (e) { return { sound: true }; }
+        }
+        function simpanNotifPref(p) { localStorage.setItem('gudang_notif_pref', JSON.stringify(p)); }
+
+        function bukaAudio() {
+            try {
+                if (!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                if (_audioCtx.state === 'suspended') _audioCtx.resume();
+            } catch (e) {}
+        }
+        ['click', 'keydown', 'touchstart'].forEach(ev => document.addEventListener(ev, bukaAudio, { passive: true }));
+
+        function mainkanSuaraNotif(jenis) {
+            if (!notifPref().sound) return;
+            try {
+                bukaAudio();
+                if (!_audioCtx || _audioCtx.state !== 'running') return;
+                const t0 = _audioCtx.currentTime;
+                const nada = jenis === 'telat' ? [[660, 0], [520, 0.22], [660, 0.44]] : [[880, 0], [1175, 0.16]];
+                nada.forEach(([f, t]) => {
+                    const o = _audioCtx.createOscillator(), g = _audioCtx.createGain();
+                    o.type = 'sine'; o.frequency.value = f;
+                    g.gain.setValueAtTime(0.0001, t0 + t);
+                    g.gain.exponentialRampToValueAtTime(0.25, t0 + t + 0.02);
+                    g.gain.exponentialRampToValueAtTime(0.0001, t0 + t + 0.35);
+                    o.connect(g); g.connect(_audioCtx.destination);
+                    o.start(t0 + t); o.stop(t0 + t + 0.4);
+                });
+            } catch (e) {}
+        }
+
+        function perbaruiTombolNotif() {
+            const btn = document.getElementById('btnNotifSuara');
+            if (!btn) return;
+            const on = notifPref().sound;
+            const izin = ('Notification' in window) ? Notification.permission : 'unsupported';
+            btn.innerHTML = `<i class="fas ${on ? 'fa-bell' : 'fa-bell-slash'}"></i>`;
+            btn.title = (on ? 'Suara notifikasi AKTIF' : 'Suara notifikasi MATI') +
+                (izin === 'default' ? ' • Klik untuk mengizinkan popup notifikasi browser' : '') +
+                (izin === 'denied' ? ' • Popup browser diblokir (ubah di pengaturan situs browser)' : '');
+        }
+
+        function klikPengaturanNotif() {
+            bukaAudio();
+            const pref = notifPref();
+            if ('Notification' in window && Notification.permission === 'default') {
+                pref.sound = true; simpanNotifPref(pref);
+                Notification.requestPermission().then(() => { perbaruiTombolNotif(); mainkanSuaraNotif('info'); });
+                return;
+            }
+            pref.sound = !pref.sound; simpanNotifPref(pref);
+            perbaruiTombolNotif();
+            if (pref.sound) mainkanSuaraNotif('info');
+            try { sbToast(pref.sound ? 'Suara notifikasi diaktifkan' : 'Suara notifikasi dimatikan'); } catch (e) {}
+        }
+
+        function tampilToastNotif(judul, teks, jenis) {
+            let wrap = document.getElementById('notifToastWrap');
+            if (!wrap) {
+                wrap = document.createElement('div');
+                wrap.id = 'notifToastWrap';
+                wrap.style.cssText = 'position:fixed;top:16px;right:16px;z-index:3000;display:flex;flex-direction:column;gap:10px;max-width:360px;width:calc(100vw - 32px);';
+                document.body.appendChild(wrap);
+            }
+            const warna = jenis === 'telat' ? '#dc3545' : (jenis === 'approval' ? '#f59e0b' : '#0d6efd');
+            const ikon = ({ sjbaru: 'fa-file-circle-plus', pod: 'fa-camera', telat: 'fa-triangle-exclamation', approval: 'fa-user-clock' })[jenis] || 'fa-bell';
+            const el = document.createElement('div');
+            el.style.cssText = `background:#fff;border-left:5px solid ${warna};border-radius:12px;box-shadow:0 10px 30px rgba(15,23,42,.25);padding:12px 14px;cursor:pointer;display:flex;gap:10px;align-items:flex-start;`;
+            el.innerHTML = `<i class="fas ${ikon}" style="color:${warna};margin-top:3px;"></i>
+                <div style="flex:1;min-width:0;"><div class="fw-bold" style="font-size:.9rem;">${dbSafe(judul)}</div>
+                <div class="small text-secondary">${dbSafe(teks)}</div></div>
+                <span style="color:#94a3b8;font-size:1.1rem;line-height:1;" data-tutup="1">&times;</span>`;
+            el.addEventListener('click', e => {
+                el.remove();
+                if (!(e.target && e.target.dataset && e.target.dataset.tutup)) { try { bukaInbox(); } catch (err) {} }
+            });
+            wrap.appendChild(el);
+            setTimeout(() => el.remove(), jenis === 'telat' ? 20000 : 12000);
+        }
+
+        function cekNotifikasiBaru() {
+            if (!inboxAktif()) return;
+            const kunci = `gudang_inbox_pop_${currentRole}_${currentUsername || currentDealer || 'user'}`;
+            const mentah = localStorage.getItem(kunci);
+            const pertamaKali = mentah === null;
+            let sudah = [];
+            try { sudah = JSON.parse(mentah) || []; } catch (e) { sudah = []; }
+
+            const evt = getInboxNotifications().filter(n => NOTIF_TIPE_POPUP.includes(n.type) && n.unread);
+            const baru = evt.filter(n => !sudah.includes(n.id));
+            if (!baru.length && !pertamaKali) return;
+            localStorage.setItem(kunci, JSON.stringify([...new Set(sudah.concat(evt.map(n => n.id)))].slice(-3000)));
+            if (pertamaKali || !baru.length) return;   // pemakaian pertama: data lama tidak dimunculkan sebagai popup
+
+            const adaTelat = baru.some(n => n.type === 'telat');
+            if (baru.length > 3) {
+                tampilToastNotif(`${baru.length} pemberitahuan baru`, 'Klik untuk membuka Inbox.', adaTelat ? 'telat' : baru[0].type);
+            } else {
+                baru.forEach(n => tampilToastNotif(n.title, n.text, n.type));
+            }
+            mainkanSuaraNotif(adaTelat ? 'telat' : 'info');
+
+            if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
+                try {
+                    const n0 = baru.length > 3 ? { title: `${baru.length} pemberitahuan baru`, text: 'Buka PartTrack untuk melihat detailnya.' } : baru[0];
+                    const nt = new Notification(n0.title, { body: n0.text, tag: 'parttrack-notif', icon: 'logo.png' });
+                    nt.onclick = () => { window.focus(); try { bukaInbox(); } catch (e) {} nt.close(); };
+                } catch (e) {}
+            }
         }
 
         function bukaInbox() {
@@ -3295,7 +3506,7 @@
             listEl.innerHTML = notifications.map(n => `
                 <div class="inbox-item ${n.unread ? 'unread' : ''}" onclick="tandaiInboxDibaca('${String(n.id).replace(/'/g,"\\'")}')">
                     <div class="d-flex align-items-start gap-2">
-                        <div class="text-primary mt-1"><i class="fas ${n.type === 'delivery' ? 'fa-truck-fast' : 'fa-circle-info'}"></i></div>
+                        <div class="text-primary mt-1"><i class="fas ${({delivery:'fa-truck-fast', sjbaru:'fa-file-circle-plus', pod:'fa-camera', telat:'fa-triangle-exclamation', approval:'fa-user-clock'})[n.type] || 'fa-circle-info'} ${n.type === 'telat' ? 'text-danger' : ''}"></i></div>
                         <div class="flex-grow-1">
                             <div class="d-flex justify-content-between gap-2">
                                 <div class="fw-bold text-dark">${dbSafe(n.title)} ${n.unread ? '<span class="inbox-dot"></span>' : ''}</div>
@@ -5410,10 +5621,10 @@
                 if (linkGPSDriver) {
                     liveLokasiSection = `
                         <div class="alert alert-primary mb-3">
-                            <h6 class="fw-bold mb-2"><i class="fas fa-satellite-dish me-2"></i>Armada Astra Sedang Dalam Perjalanan</h6>
+                            <h6 class="fw-bold mb-2"><i class="fas fa-satellite-dish me-2"></i>Pesanan Anda Sedang Diantar</h6>
                             <div class="mb-3"></div>
                             <button type="button" class="btn btn-primary btn-lg fw-bold px-4 shadow" onclick="bukaPetaLive('${item.shipment}')">
-                                <i class="fas fa-map-marked-alt me-2"></i> Buka Peta Live Lokasi Driver
+                                <i class="fas fa-map-marked-alt me-2"></i> Lacak Pengiriman Sekarang
                             </button>
                         </div>
                     `;
@@ -5673,7 +5884,7 @@
 
             const tampil = () => {
                 _petaLinkAktif = link;
-                document.getElementById("judulPetaLive").innerText = `CEK LOKASI ARMADA ASTRA - ${item.shipment}`;
+                document.getElementById("judulPetaLive").innerText = `Lacak Armada Astra - ${item.shipment}`;
                 document.getElementById("btnPetaTabBaru").style.display = (currentRole === "admin" || currentRole === "warehouse") ? "inline-block" : "none";
                 frame.src = link;
                 bootstrap.Modal.getOrCreateInstance(mapEl).show();
@@ -6160,7 +6371,8 @@
                 total: totalKoliVal,
                 leadTimeVal: leadTimeVal,
                 status: tanpaFoto ? "OK" : "BELUM KEMBALI",
-                podFoto: ""
+                podFoto: "",
+                dibuat_at: Date.now()
             };
 
             transaksiData.unshift(newObj);
@@ -6264,6 +6476,7 @@
             let reader = new FileReader();
             reader.onload = function(evt) {
                 item.podFoto = evt.target.result;
+                item.pod_at = Date.now();
                 item.status = 'OK';
                 if (!pengembalianSJList.includes(ship)) pengembalianSJList.push(ship);
                 belumKembali = Math.max(0, belumKembali - 1);
@@ -6329,7 +6542,7 @@
         //  - Kategori kemasan dibaca dari kolom "Jenis" (jenis_kemasan); KOLI & SP dihitung sebagai Part.
         // ============================================================
         const LAP_ARMADA_LAIN_KEYWORDS = ['KGP', 'JNE']; // driver/ekspedisi yang mengandung kata ini = Armada Lain
-        const LAP_KODE_DS = ['DS'];
+        const LAP_KODE_DS = ['DS', 'KOLI'];   // Koli dihitung sebagai DS
         const LAP_KODE_OLI = ['DO'];
         const LAP_KODE_BAN = ['IK'];
                 const LAP_ARMADA = ['HSO (Driver Tetap)', 'HSO (Driver Tidak Tetap)', 'Armada Lain (KGP/JNE)'];
@@ -6339,6 +6552,7 @@
         let lapHarianCache = null;
 
         function lapKodeCocok(v, list) {
+            v = String(v || '').replace(/^D0(?=$|[^A-Z0-9])/, 'DO');   // "D0" (angka nol) disamakan dengan "DO"
             return list.some(k => k && (v === k || new RegExp('^' + k + '[^A-Z]').test(v)));
         }
 
@@ -6468,8 +6682,7 @@
             document.getElementById('lapTabelArmada').innerHTML =
                 LAP_ARMADA.map(n => barisArmada(n, C.armada[n], P.armada[n])).join('') +
                 barisArmada('TOTAL', C.total, P.total).replace('<tr>', '<tr class="table-active fw-bold">');
-            document.getElementById('lapCatatanArmada').innerHTML =
-                `<b>Driver Tetap</b>: ${daftarNamaDriver().map(dbSafe).join(', ') || '-'} (cukup salah satu nama pasangan yang tercatat, mis. AMIR saja atau TYO saja). <b>Driver Tidak Tetap</b>: driver di luar daftar itu (mis. ABDI), otomatis OK tanpa foto tanda terima. <b>Armada Lain</b>: nama driver / ekspedisi mengandung ${LAP_ARMADA_LAIN_KEYWORDS.map(k => `"${k}"`).join(" / ")}. Race dihitung unik per tanggal + driver + nomor race.`;
+            document.getElementById('lapCatatanArmada').innerHTML = '';
 
             // Kemasan
             const kodeLabel = { 'Dus Oli': LAP_KODE_OLI.join(', '), 'Dus Ban': LAP_KODE_BAN.join(', '), 'Dus Part': 'kode lainnya, KOLI, SP' };
@@ -6672,7 +6885,7 @@
                 'Driver': d.nama, 'Armada': d.armada, 'Race': d.race.size, 'Surat Jalan': d.sj, 'Dus / Koli': d.koli, 'Rata-rata Lead Time (hari)': +lapAvg(d).toFixed(1) })));
             const H = lapHarianCache || hitungRekapHarian(`${ym}-01`, `${ym}-31`);
             const barisH = (label, x, isTotal) => ({
-                'Tanggal': label, 'DO': x.oli, 'DS': x.ds, 'IK': x.ban, 'Koli / SP / Lain': x.lain,
+                'Tanggal': label, 'DO': x.oli, 'DS': x.ds, 'IK': x.ban, 'Lain': x.lain,
                 'Total Terantar (Dus/Koli)': x.oli + x.ds + x.ban + x.lain,
                 'Rata-rata Lead Time (Hari)': x.leadN ? +(x.leadSum / x.leadN).toFixed(1) : '',
                 'Race HSO (Driver Tetap)': isTotal ? x.race[LAP_ARMADA[0]] : x.race[LAP_ARMADA[0]].size,
@@ -7050,6 +7263,23 @@
             if (e.target.closest && e.target.closest('#sidebarMenu .nav-link')) closeSidebar();
         });
         window.addEventListener('resize', function () { if (window.innerWidth > 768) closeSidebar(); });
+    </script>
+
+    <script>
+        // Judul tabel bertingkat (rowspan/colspan): baris ke-2 menempel tepat di bawah baris ke-1.
+        function atur_header_bertingkat() {
+            document.querySelectorAll('.table-responsive > .table > thead').forEach(function (thead) {
+                var rows = thead.rows, top = 0;
+                if (rows.length < 2) return;
+                for (var i = 0; i < rows.length; i++) {
+                    for (var j = 0; j < rows[i].cells.length; j++) rows[i].cells[j].style.top = top + 'px';
+                    top += rows[i].getBoundingClientRect().height;
+                }
+            });
+        }
+        document.addEventListener('shown.bs.tab', function () { setTimeout(atur_header_bertingkat, 120); });
+        window.addEventListener('resize', atur_header_bertingkat);
+        window.addEventListener('load', function () { setTimeout(atur_header_bertingkat, 600); });
     </script>
 </body>
 </html>
