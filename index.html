@@ -1607,8 +1607,8 @@
                         </div>
                         <div class="card-body p-4">
                             <div class="row g-4">
-                                <div class="col-xl-6"><div class="card border shadow-sm p-3"><div style="height: 300px;"><canvas id="chartLeadTime"></canvas></div></div></div>
-                                <div class="col-xl-6"><div class="card border shadow-sm p-3"><div style="height: 300px;"><canvas id="chartKoli"></canvas></div></div></div>
+                                <div class="col-xl-6"><div class="card border shadow-sm p-3"><div id="badgeLeadTime" class="small fw-semibold mb-2"></div><div style="height: 300px;"><canvas id="chartLeadTime"></canvas></div></div></div>
+                                <div class="col-xl-6"><div class="card border shadow-sm p-3"><div id="badgeKoliTrend" class="small fw-semibold mb-2"></div><div style="height: 300px;"><canvas id="chartKoli"></canvas></div></div></div>
                             </div>
                         </div>
                     </div>
@@ -1709,7 +1709,6 @@
                             </div>
                         </div>
                         <div class="card-body p-4">
-                            <div class="small text-muted mb-3"><i class="fas fa-info-circle me-1"></i>Kolom <b>Outstanding</b> diisi harian di menu <b>Surat Jalan Keluar</b> (kolom Outstanding Pengantaran, sesuai Tanggal Kirim). Koli dan SP dihitung sebagai Part. Race dihitung unik per tanggal + driver + nomor race.</div>
                             <div class="row g-3 mb-4" id="rekapKpi"></div>
                             <div style="height:300px;" class="mb-4"><canvas id="chartRekapHarian"></canvas></div>
                             <div class="table-responsive">
@@ -7189,86 +7188,120 @@
         }
 
         function initDashboardCharts() {
+            // ---- Tentukan periode trend ----
+            // Trend butuh minimal 2 hari. Jika filter kosong / hanya 1 hari, otomatis tampilkan 14 hari terakhir sampai tanggal akhir.
             let startDate = document.getElementById('filterStart').value;
             let endDate = document.getElementById('filterEnd').value;
+            const geser = (tgl, hari) => {
+                const d = new Date(tgl + 'T00:00:00'); d.setDate(d.getDate() + hari);
+                return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            };
+            const hariIni = getTanggalHariIniLocal();
+            if (!startDate || !endDate || startDate === endDate) {
+                const akhir = endDate || startDate || hariIni;
+                startDate = geser(akhir, -13);
+                endDate = akhir;
+            }
+            const kemarin = geser(hariIni, -1);
 
-            let filtered = transaksiData.filter(item => {
-                let tgl = cleanDateOnly(item.tgl_kirim || item.tgl_kirim_raw);
-                if (startDate && tgl < startDate) return false;
-                if (endDate && tgl > endDate) return false;
-                return true;
+            // ---- Kelompokkan per tanggal kirim ----
+            const perHari = {};
+            transaksiData.forEach(item => {
+                const tgl = cleanDateOnly(item.tgl_kirim || item.tgl_kirim_raw);
+                if (!tgl || tgl < startDate || tgl > endDate) return;
+                if (!perHari[tgl]) perHari[tgl] = { koli: 0, totalLead: 0, count: 0 };
+                perHari[tgl].koli += parseInt(item.total) || 0;
+                perHari[tgl].totalLead += hitungLeadTimeLive(item);
+                perHari[tgl].count += 1;
             });
+            const tanggal = Object.keys(perHari).sort();
+            const labels = tanggal.map(t => formatDateToDisplay(t));
+            const leadValues = tanggal.map(t => perHari[t].count ? +(perHari[t].totalLead / perHari[t].count).toFixed(1) : 0);
+            const koliValues = tanggal.map(t => perHari[t].koli);
 
-            let driverData = {};
-            filtered.forEach(item => {
-                let drv = item.driver || 'Lainnya';
-                if (!driverData[drv]) {
-                    driverData[drv] = { koli: 0, totalLeadTime: 0, count: 0 };
+            // ---- Bandingkan hari terakhir vs hari sebelumnya ----
+            const namaHari = t => t === hariIni ? 'Hari ini' : (t === kemarin ? 'Kemarin' : formatDateToDisplay(t));
+            const banding = (nilai) => {
+                const n = nilai.length;
+                if (n < 2) return null;
+                const now = nilai[n - 1], prev = nilai[n - 2];
+                return { now, prev, arah: now > prev ? 'naik' : (now < prev ? 'turun' : 'sama'), tNow: namaHari(tanggal[n - 1]), tPrev: namaHari(tanggal[n - 2]) };
+            };
+            const bLead = banding(leadValues);
+            const bKoli = banding(koliValues);
+
+            const isiBadge = (id, html, kelas) => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.className = 'small fw-semibold mb-2 ' + (kelas || 'text-muted');
+                el.innerHTML = html;
+            };
+            const periodeTeks = tanggal.length ? `${formatDateToDisplay(startDate)} - ${formatDateToDisplay(endDate)}` : '';
+
+            let ikonLead = '', ikonKoli = '';
+            if (!bLead) {
+                isiBadge('badgeLeadTime', tanggal.length ? 'Belum ada hari pembanding pada periode ini.' : 'Tidak ada data pada periode ini.');
+            } else if (bLead.arah === 'naik') {
+                ikonLead = '\u26A0\uFE0F';
+                isiBadge('badgeLeadTime', `\u26A0\uFE0F Waspada! Lead time naik: ${bLead.tNow} ${bLead.now} hari vs ${bLead.tPrev} ${bLead.prev} hari`, 'text-danger');
+            } else if (bLead.arah === 'turun') {
+                isiBadge('badgeLeadTime', `\u2705 Lead time membaik: ${bLead.tNow} ${bLead.now} hari vs ${bLead.tPrev} ${bLead.prev} hari`, 'text-success');
+            } else {
+                isiBadge('badgeLeadTime', `\u2796 Lead time sama: ${bLead.tNow} ${bLead.now} hari vs ${bLead.tPrev} ${bLead.prev} hari`);
+            }
+            if (!bKoli) {
+                isiBadge('badgeKoliTrend', tanggal.length ? 'Belum ada hari pembanding pada periode ini.' : 'Tidak ada data pada periode ini.');
+            } else if (bKoli.arah === 'naik') {
+                ikonKoli = '\u{1F3D4}\uFE0F';
+                isiBadge('badgeKoliTrend', `\u{1F3D4}\uFE0F Naik! ${bKoli.tNow} ${bKoli.now} koli vs ${bKoli.tPrev} ${bKoli.prev} koli`, 'text-success');
+            } else if (bKoli.arah === 'turun') {
+                ikonKoli = '\u{1F4C9}';
+                isiBadge('badgeKoliTrend', `\u{1F4C9} Turun: ${bKoli.tNow} ${bKoli.now} koli vs ${bKoli.tPrev} ${bKoli.prev} koli`, 'text-danger');
+            } else {
+                isiBadge('badgeKoliTrend', `\u2796 Sama: ${bKoli.tNow} ${bKoli.now} koli vs ${bKoli.tPrev} ${bKoli.prev} koli`);
+            }
+
+            // Ikon kecil di titik terakhir garis
+            const pluginIkon = (emoji) => ({
+                id: 'ikonTitikAkhir',
+                afterDatasetsDraw(chart) {
+                    if (!emoji) return;
+                    const meta = chart.getDatasetMeta(0);
+                    const pt = meta.data[meta.data.length - 1];
+                    if (!pt) return;
+                    const c = chart.ctx;
+                    c.save(); c.font = '22px sans-serif'; c.textAlign = 'center'; c.textBaseline = 'bottom';
+                    c.fillText(emoji, pt.x, pt.y - 8); c.restore();
                 }
-                driverData[drv].koli += parseInt(item.total) || 0;
-                driverData[drv].totalLeadTime += hitungLeadTimeLive(item);
-                driverData[drv].count += 1;
             });
 
-            let labels = Object.keys(driverData);
-            let koliValues = labels.map(l => driverData[l].koli);
-            let avgLeadTimeValues = labels.map(l => driverData[l].count ? (driverData[l].totalLeadTime / driverData[l].count).toFixed(1) : 0);
-
-            let ctxLead = document.getElementById('chartLeadTime');
-            if (ctxLead) {
-                if (chartLeadTimeInstance) chartLeadTimeInstance.destroy();
-                chartLeadTimeInstance = new Chart(ctxLead, {
-                    type: 'bar',
+            const buatGaris = (kanvas, instanceLama, judul, label, data, warna, ikon) => {
+                if (instanceLama) instanceLama.destroy();
+                const adaData = labels.length > 0;
+                return new Chart(kanvas, {
+                    type: 'line',
                     data: {
-                        labels: labels.length > 0 ? labels : ['Tidak Ada Data'],
+                        labels: adaData ? labels : ['Tidak Ada Data'],
                         datasets: [{
-                            label: 'Rata-Rata Lead Time (Hari)',
-                            data: labels.length > 0 ? avgLeadTimeValues : [0],
-                            backgroundColor: 'rgba(220, 53, 69, 0.7)',
-                            borderColor: '#dc3545',
-                            borderWidth: 1
+                            label, data: adaData ? data : [0],
+                            borderColor: warna, backgroundColor: warna + '22', fill: true, tension: 0.3,
+                            pointRadius: 4, pointHoverRadius: 6, pointBackgroundColor: warna
                         }]
                     },
                     options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            title: { display: true, text: 'Rata-Rata Lead Time Pengiriman per Driver' }
-                        },
-                        scales: {
-                            y: { beginAtZero: true }
-                        }
-                    }
-                });
-            }
-
-            let ctxKoli = document.getElementById('chartKoli');
-            if (ctxKoli) {
-                if (chartKoliInstance) chartKoliInstance.destroy();
-                chartKoliInstance = new Chart(ctxKoli, {
-                    type: 'bar',
-                    data: {
-                        labels: labels.length > 0 ? labels : ['Tidak Ada Data'],
-                        datasets: [{
-                            label: 'Total Koli Dikirim',
-                            data: labels.length > 0 ? koliValues : [0],
-                            backgroundColor: 'rgba(67, 97, 238, 0.7)',
-                            borderColor: '#4361ee',
-                            borderWidth: 1
-                        }]
+                        responsive: true, maintainAspectRatio: false,
+                        layout: { padding: { top: 30 } },
+                        plugins: { title: { display: true, text: judul + (periodeTeks ? ` (${periodeTeks})` : '') } },
+                        scales: { y: { beginAtZero: true } }
                     },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            title: { display: true, text: 'Total Koli Pengiriman per Driver' }
-                        },
-                        scales: {
-                            y: { beginAtZero: true }
-                        }
-                    }
+                    plugins: [pluginIkon(ikon)]
                 });
-            }
+            };
+
+            const ctxLead = document.getElementById('chartLeadTime');
+            if (ctxLead) chartLeadTimeInstance = buatGaris(ctxLead, chartLeadTimeInstance, 'Trend Rata-Rata Lead Time per Hari', 'Rata-Rata Lead Time (Hari)', leadValues, '#dc3545', ikonLead);
+            const ctxKoli = document.getElementById('chartKoli');
+            if (ctxKoli) chartKoliInstance = buatGaris(ctxKoli, chartKoliInstance, 'Trend Total Koli Terkirim per Hari', 'Total Koli Dikirim', koliValues, '#4361ee', ikonKoli);
         }
     
 
