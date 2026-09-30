@@ -2568,6 +2568,7 @@
         const rec = payload.new && payload.new.key ? payload.new : payload.old;
         if (!rec || !SHARED_KEYS.includes(rec.key)) return;
         if (payload.eventType !== 'DELETE' && rec.client_id === CLIENT_ID) return;   // perubahan dari tab ini sendiri
+        if (_pollVersi && rec.updated_at) _pollVersi[rec.key] = rec.updated_at;
         antrianRefresh.add(rec.key);
         clearTimeout(refreshTimer);
         refreshTimer = setTimeout(terapkanPerubahanRemote, 700);
@@ -2609,7 +2610,29 @@
                 }
                 if (me.role === 'admin') muatProfilTertunda();
             })
-            .subscribe();
+            .subscribe(st => { console.log('[realtime]', st); });
+        // Cadangan: bila sinyal realtime tidak sampai, cek perubahan ke server tiap 20 detik.
+        cekPerubahanBerkala();
+        setInterval(cekPerubahanBerkala, 20000);
+    }
+
+    let _pollVersi = null;
+    async function cekPerubahanBerkala() {
+        if (document.hidden || applyingRemote) return;
+        try {
+            const { data, error } = await sb.from('app_store').select('key,updated_at,client_id');
+            if (error || !data) return;
+            const baru = {};
+            data.forEach(m => { if (SHARED_KEYS.includes(m.key)) baru[m.key] = m.updated_at; });
+            if (_pollVersi) {
+                data.forEach(m => {
+                    if (!SHARED_KEYS.includes(m.key)) return;
+                    if (_pollVersi[m.key] !== m.updated_at && m.client_id !== CLIENT_ID) antrianRefresh.add(m.key);
+                });
+                if (antrianRefresh.size) { clearTimeout(refreshTimer); refreshTimer = setTimeout(terapkanPerubahanRemote, 300); }
+            }
+            _pollVersi = baru;
+        } catch (e) {}
     }
 
     // ---------- boot ----------
