@@ -2410,20 +2410,39 @@
         if (this !== localStorage || applyingRemote || !SHARED_KEYS.includes(key) || !bolehTulis(key)) return;
         if (lastSynced[key] === String(value)) return;
         clearTimeout(timers[key]);
+        pendingKeys.add(key); tandaiBelumTersimpan();
         timers[key] = setTimeout(() => { timers[key] = null; kirimKeServer(key); }, 500);
     };
 
-    async function kirimKeServer(key) {
+    const pendingKeys = new Set();   // key yang belum berhasil tersimpan ke server
+    function tandaiBelumTersimpan() {
+        let b = document.getElementById('sbPendingBar');
+        if (pendingKeys.size) {
+            if (!b) {
+                b = document.createElement('div'); b.id = 'sbPendingBar';
+                b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99997;background:#dc3545;color:#fff;font:600 13px Inter,sans-serif;padding:8px 12px;text-align:center';
+                document.body.appendChild(b);
+            }
+            b.textContent = 'Data belum tersimpan ke server. Jangan refresh atau tutup halaman dulu...';
+        } else if (b) b.remove();
+    }
+    window.addEventListener('beforeunload', e => { if (pendingKeys.size) { e.preventDefault(); e.returnValue = ''; } });
+
+    async function kirimKeServer(key, percobaan) {
+        percobaan = percobaan || 1;
         const raw = localStorage.getItem(key);
-        if (raw === null) return;
+        if (raw === null) { pendingKeys.delete(key); tandaiBelumTersimpan(); return; }
         let val;
         try { val = JSON.parse(raw); } catch (e) { return; }
+        pendingKeys.add(key); tandaiBelumTersimpan();
         const { error } = await sb.from('app_store').upsert({ key, value: val, updated_at: new Date().toISOString(), client_id: CLIENT_ID });
         if (error) {
-            console.error('Gagal sync', key, error);
-            sbToast('Gagal menyimpan ke server (' + key.replace('gudang_', '') + '): ' + error.message, true);
-            return;
+            console.error('Gagal sync', key, error, 'ukuran(KB)=', Math.round(raw.length / 1024));
+            if (percobaan < 4) { setTimeout(() => kirimKeServer(key, percobaan + 1), 2000 * percobaan); return; }
+            sbToast('Gagal menyimpan ke server (' + key.replace('gudang_', '') + ', ' + Math.round(raw.length / 1024) + ' KB): ' + error.message, true);
+            return;   // tetap ditandai belum tersimpan
         }
+        pendingKeys.delete(key); tandaiBelumTersimpan();
         lastSynced[key] = raw;
         window.__SB_DATA_DI_SERVER = true;
         if (key === 'gudang_db_dealer_list_raw') syncDealerPublik(val);
@@ -2575,7 +2594,7 @@
     }
 
     async function terapkanPerubahanRemote() {
-        const keys = [...antrianRefresh]; antrianRefresh.clear();
+        const keys = [...antrianRefresh].filter(k => !pendingKeys.has(k)); antrianRefresh.clear();
         const hasil = {};
         for (const key of keys) {   // ambil ulang dari server (payload realtime bisa terpotong untuk data besar)
             const { data, error } = await sb.from('app_store').select('value').eq('key', key).maybeSingle();
@@ -3785,6 +3804,11 @@
                 adminEls.forEach(el => el.style.display = 'block');
                 adminDealerEls.forEach(el => el.style.display = 'block');
                 aktifkanTabAwal('#menu-laporan-bulanan');
+                if (!document.getElementById('btnKompresLama')) {
+                    const bk = document.createElement('button'); bk.id = 'btnKompresLama'; bk.className = 'btn btn-sm btn-outline-warning ms-2';
+                    bk.textContent = 'Kompres Foto Lama'; bk.onclick = kompresFotoLama;
+                    document.getElementById('userRoleBadge').insertAdjacentElement('afterend', bk);
+                }
             } else if (currentRole === 'driver') {
                 document.getElementById('userRoleBadge').innerText = `Driver • ${currentUsername || 'User'}`;
                 driverEls.forEach(el => el.style.display = 'block');
@@ -6591,6 +6615,39 @@ if (_sudahAda) {
             alert(`Surat Jalan ${val} berhasil dikonfirmasi kembali (STATUS: OK)!`);
         });
 
+        // Kecilkan foto: sisi terpanjang maks 1024px, JPEG kualitas 0.6 (~60-150 KB per foto)
+        function kompresFoto(sumber, maxSisi, kualitas) {
+            maxSisi = maxSisi || 1024; kualitas = kualitas || 0.6;
+            return new Promise(function(res, rej) {
+                const img = new Image();
+                img.onload = function() {
+                    const skala = Math.min(1, maxSisi / Math.max(img.naturalWidth, img.naturalHeight));
+                    const w = Math.round(img.naturalWidth * skala), h = Math.round(img.naturalHeight * skala);
+                    const c = document.createElement('canvas'); c.width = w; c.height = h;
+                    const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, w, h); x.drawImage(img, 0, 0, w, h);
+                    res(c.toDataURL('image/jpeg', kualitas));
+                };
+                img.onerror = function() { rej(new Error('Foto tidak bisa dibaca')); };
+                if (typeof sumber === 'string') img.src = sumber;
+                else { const r = new FileReader(); r.onload = function() { img.src = r.result; }; r.onerror = function() { rej(r.error); }; r.readAsDataURL(sumber); }
+            });
+        }
+
+        async function kompresFotoLama() {
+            const berat = transaksiData.filter(t => t.podFoto && t.podFoto.length > 250000);
+            if (!berat.length) { alert('Tidak ada foto besar. Semua foto sudah ringan.'); return; }
+            if (!confirm('Ada ' + berat.length + ' foto besar. Kompres sekarang? (Tunggu sampai muncul pesan selesai.)')) return;
+            let ok = 0, sebelum = 0, sesudah = 0;
+            for (const t of berat) {
+                sebelum += t.podFoto.length;
+                try { const k = await kompresFoto(t.podFoto); if (k.length < t.podFoto.length) { t.podFoto = k; ok++; } } catch (e) {}
+                sesudah += t.podFoto.length;
+            }
+            localStorage.setItem('gudang_transaksi', JSON.stringify(transaksiData));
+            try { renderLaporanUlang(); } catch (e) {}
+            alert(ok + ' foto dikompres: ' + (sebelum / 1048576).toFixed(1) + ' MB menjadi ' + (sesudah / 1048576).toFixed(1) + ' MB. Tunggu banner merah hilang sebelum menutup halaman.');
+        }
+
         document.getElementById('formDriverPOD').addEventListener('submit', function(e) {
             e.preventDefault();
             let ship = document.getElementById('driverShipment').value.trim();
@@ -6604,9 +6661,8 @@ if (_sudahAda) {
             }
 
             let file = fileInput.files[0];
-            let reader = new FileReader();
-            reader.onload = function(evt) {
-                item.podFoto = evt.target.result;
+            kompresFoto(file).then(function(hasilFoto) {
+                item.podFoto = hasilFoto;
                 item.pod_at = Date.now();
                 item.status = 'OK';
                 if (!pengembalianSJList.includes(ship)) pengembalianSJList.push(ship);
@@ -6621,8 +6677,7 @@ if (_sudahAda) {
                 muatTabelDriverPOD();
                 updateStatistikUI();
                 alert(`Bukti foto tanda terima (POD) untuk shipment ${ship} berhasil di-upload!`);
-            };
-            reader.readAsDataURL(file);
+            }).catch(function(err) { alert('Foto gagal diproses, coba pilih ulang: ' + (err && err.message ? err.message : err)); });
         });
 
         function updateStatistikUI() {
