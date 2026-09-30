@@ -3241,7 +3241,7 @@
 
             // Surat Jalan lewat 3 hari belum kembali (admin & warehouse)
             const tambahSJTelat = () => {
-                (transaksiData || []).filter(it => !isDokOK(it) && hariLewat(it) >= 3).slice(0, 200).forEach(it => {
+                (transaksiData || []).filter(it => !isDokOK(it) && !isDalamPengantaran(it) && hariLewat(it) >= 3).slice(0, 200).forEach(it => {
                     const shipment = dbText(it.shipment || it.no_sj || '-');
                     list.push({
                         id: `telat_${shipment}`, type: 'telat', title: 'Surat Jalan Belum Kembali',
@@ -3252,13 +3252,13 @@
                 });
             };
 
-            // Surat Jalan tepat 2 hari masih dalam proses pengantaran (belum ada foto POD) - admin & warehouse
+            // Surat Jalan >= 2 hari masih dalam proses pengantaran (belum ada foto POD) - khusus admin & warehouse
             const tambahSJ2Hari = () => {
-                (transaksiData || []).filter(it => isDalamPengantaran(it) && hariLewat(it) === 2).slice(0, 200).forEach(it => {
+                (transaksiData || []).filter(it => isDalamPengantaran(it) && hariLewat(it) >= 2).slice(0, 200).forEach(it => {
                     const shipment = dbText(it.shipment || it.no_sj || '-');
                     list.push({
-                        id: `proses2_${shipment}`, type: 'proses', title: 'SJ 2 Hari Masih Dalam Pengantaran',
-                        text: `Shipment ${shipment} (${namaDealerItem(it)}) sudah 2 hari masih dalam proses pengantaran.`,
+                        id: `proses_${shipment}`, type: 'proses', title: 'SJ Masih Dalam Pengantaran',
+                        text: `Shipment ${shipment} (${namaDealerItem(it)}) sudah ${hariLewat(it)} hari masih dalam proses pengantaran.`,
                         detail: `Tgl kirim ${formatDateToDisplay(it.tgl_kirim)}${it.driver ? ` • Driver: ${it.driver}` : ''}${it.no_faktur ? ` • Faktur: ${it.no_faktur}` : ''}`,
                         time: tglKirimItem(it) || today, unread: true
                     });
@@ -3282,13 +3282,13 @@
                 } catch (e) {}
                 tambahSJTelat();
                 if (!list.length) {
-                    list.push({id:`summary_${today}`, type:'info', title:'Monitoring Pengantaran', text:'Tidak ada surat jalan yang tertahan dalam pengantaran.', detail:'Pemberitahuan muncul otomatis jika ada SJ yang sudah 2 hari belum ada foto POD.', time:today, unread:true});
+                    list.push({id:`summary_${today}`, type:'info', title:'Monitoring Pengantaran', text:'Tidak ada surat jalan yang tertahan dalam pengantaran.', detail:'Pemberitahuan muncul otomatis jika ada SJ yang sudah 2 hari atau lebih belum ada foto POD.', time:today, unread:true});
                 }
             } else if (currentRole === 'warehouse') {
                 tambahSJ2Hari();
                 tambahSJTelat();
                 if (!list.length) {
-                    list.push({id:`summary_${today}_wh`, type:'info', title:'Tidak Ada SJ Tertahan', text:'Tidak ada surat jalan yang 2 hari masih dalam pengantaran atau lewat 3 hari belum kembali.', detail:'Pemberitahuan muncul otomatis jika ada SJ yang tertahan.', time:today, unread:true});
+                    list.push({id:`summary_${today}_wh`, type:'info', title:'Tidak Ada SJ Tertahan', text:'Tidak ada surat jalan yang 2 hari atau lebih masih dalam pengantaran.', detail:'Pemberitahuan muncul otomatis jika ada SJ yang tertahan.', time:today, unread:true});
                 }
             } else if (currentRole === 'salespart') {
                 (transaksiData || []).filter(it => sekarang - tsBaruItem(it) <= JENDELA_MS).forEach(it => {
