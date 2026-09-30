@@ -1607,8 +1607,8 @@
                         </div>
                         <div class="card-body p-4">
                             <div class="row g-4">
-                                <div class="col-xl-6"><div class="card border shadow-sm p-3"><div id="badgeLeadTime" class="small fw-semibold mb-2"></div><div style="height: 300px;"><canvas id="chartLeadTime"></canvas></div></div></div>
-                                <div class="col-xl-6"><div class="card border shadow-sm p-3"><div id="badgeKoliTrend" class="small fw-semibold mb-2"></div><div style="height: 300px;"><canvas id="chartKoli"></canvas></div></div></div>
+                                <div class="col-xl-6"><div class="card border-0 shadow-sm p-3" style="border-radius:16px;"><div id="badgeLeadTime" class="small fw-semibold mb-2"></div><div style="height: 300px;"><canvas id="chartLeadTime"></canvas></div></div></div>
+                                <div class="col-xl-6"><div class="card border-0 shadow-sm p-3" style="border-radius:16px;"><div id="badgeKoliTrend" class="small fw-semibold mb-2"></div><div style="height: 300px;"><canvas id="chartKoli"></canvas></div></div></div>
                             </div>
                         </div>
                     </div>
@@ -7233,7 +7233,11 @@
             const isiBadge = (id, html, kelas) => {
                 const el = document.getElementById(id);
                 if (!el) return;
-                el.className = 'small fw-semibold mb-2 ' + (kelas || 'text-muted');
+                const warna = kelas === 'text-danger' ? ['#fee2e2', '#b91c1c', '#fecaca']
+                    : kelas === 'text-success' ? ['#dcfce7', '#15803d', '#bbf7d0']
+                    : ['#f1f5f9', '#475569', '#e2e8f0'];
+                el.className = 'small fw-semibold mb-2';
+                el.style.cssText = `display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:999px;background:${warna[0]};color:${warna[1]};border:1px solid ${warna[2]};`;
                 el.innerHTML = html;
             };
             const periodeTeks = tanggal.length ? `${formatDateToDisplay(startDate)} - ${formatDateToDisplay(endDate)}` : '';
@@ -7261,47 +7265,91 @@
                 isiBadge('badgeKoliTrend', `\u2796 Sama: ${bKoli.tNow} ${bKoli.now} koli vs ${bKoli.tPrev} ${bKoli.prev} koli`);
             }
 
-            // Ikon kecil di titik terakhir garis
-            const pluginIkon = (emoji) => ({
-                id: 'ikonTitikAkhir',
-                afterDatasetsDraw(chart) {
-                    if (!emoji) return;
-                    const meta = chart.getDatasetMeta(0);
-                    const pt = meta.data[meta.data.length - 1];
-                    if (!pt) return;
-                    const c = chart.ctx;
-                    c.save(); c.font = '22px sans-serif'; c.textAlign = 'center'; c.textBaseline = 'bottom';
-                    c.fillText(emoji, pt.x, pt.y - 8); c.restore();
-                }
-            });
+            const gradasi = (warna) => (ctx) => {
+                const area = ctx.chart.chartArea;
+                if (!area) return warna + '22';
+                const g = ctx.chart.ctx.createLinearGradient(0, area.top, 0, area.bottom);
+                g.addColorStop(0, warna + '55'); g.addColorStop(1, warna + '05');
+                return g;
+            };
 
-            const buatGaris = (kanvas, instanceLama, judul, label, data, warna, ikon) => {
+            const buatGaris = (kanvas, instanceLama, judul, namaSingkat, data, warna, ikon, satuan) => {
                 if (instanceLama) instanceLama.destroy();
                 const adaData = labels.length > 0;
+                const nilai = adaData ? data : [0];
+                const rata = adaData ? +(data.reduce((x, y) => x + y, 0) / data.length).toFixed(1) : 0;
+                const akhir = nilai.length - 1;
+
+                // Angka di tiap titik + ikon di titik terakhir
+                const pluginLabel = {
+                    id: 'labelTitik',
+                    afterDatasetsDraw(chart) {
+                        if (!adaData) return;
+                        const meta = chart.getDatasetMeta(0);
+                        const c = chart.ctx;
+                        c.save(); c.textAlign = 'center'; c.textBaseline = 'bottom';
+                        meta.data.forEach((pt, i) => {
+                            const last = i === akhir;
+                            if (nilai.length > 16 && !last) return;
+                            c.font = (last ? '700 12px' : '500 10px') + ' Inter, sans-serif';
+                            c.fillStyle = last ? warna : '#94a3b8';
+                            c.fillText(nilai[i], pt.x, pt.y - (last ? 15 : 10));
+                        });
+                        if (ikon) { c.font = '24px sans-serif'; c.fillText(ikon, meta.data[akhir].x, meta.data[akhir].y - 32); }
+                        c.restore();
+                    }
+                };
+
                 return new Chart(kanvas, {
                     type: 'line',
                     data: {
                         labels: adaData ? labels : ['Tidak Ada Data'],
-                        datasets: [{
-                            label, data: adaData ? data : [0],
-                            borderColor: warna, backgroundColor: warna + '22', fill: true, tension: 0.3,
-                            pointRadius: 4, pointHoverRadius: 6, pointBackgroundColor: warna
-                        }]
+                        datasets: [
+                            {
+                                label: namaSingkat, data: nilai,
+                                borderColor: warna, borderWidth: 3, borderCapStyle: 'round', borderJoinStyle: 'round',
+                                backgroundColor: gradasi(warna), fill: true, tension: 0.4,
+                                pointBackgroundColor: '#ffffff', pointBorderColor: warna,
+                                pointRadius: ctx => ctx.dataIndex === akhir ? 8 : 5,
+                                pointBorderWidth: ctx => ctx.dataIndex === akhir ? 4 : 2.5,
+                                pointHoverRadius: 9, pointHoverBorderWidth: 4
+                            },
+                            {
+                                label: `Rata-rata periode (${rata} ${satuan})`, data: nilai.map(() => rata),
+                                borderColor: '#94a3b8', borderWidth: 1.5, borderDash: [6, 6],
+                                pointRadius: 0, pointHoverRadius: 0, fill: false, tension: 0
+                            }
+                        ]
                     },
                     options: {
                         responsive: true, maintainAspectRatio: false,
-                        layout: { padding: { top: 30 } },
-                        plugins: { title: { display: true, text: judul + (periodeTeks ? ` (${periodeTeks})` : '') } },
-                        scales: { y: { beginAtZero: true } }
+                        animation: { duration: 900, easing: 'easeOutQuart' },
+                        interaction: { mode: 'index', intersect: false },
+                        layout: { padding: { top: 44, right: 16, left: 4 } },
+                        plugins: {
+                            title: { display: true, text: judul + (periodeTeks ? `  \u2022  ${periodeTeks}` : ''), align: 'start', color: '#0f172a', font: { size: 14, weight: '700' }, padding: { bottom: 4 } },
+                            legend: { position: 'bottom', labels: { usePointStyle: true, pointStyle: 'circle', boxWidth: 8, color: '#64748b', font: { size: 11 } } },
+                            tooltip: {
+                                backgroundColor: '#0f172a', padding: 12, cornerRadius: 10, boxPadding: 4,
+                                titleFont: { weight: '700' },
+                                callbacks: {
+                                    label: c => c.datasetIndex === 1 ? ` Rata-rata periode: ${c.parsed.y} ${satuan}` : ` ${namaSingkat}: ${c.parsed.y} ${satuan}`
+                                }
+                            }
+                        },
+                        scales: {
+                            x: { grid: { display: false }, border: { display: false }, ticks: { color: '#64748b', font: { size: 11 } } },
+                            y: { beginAtZero: true, grid: { color: '#e2e8f0', borderDash: [4, 4] }, border: { display: false }, ticks: { color: '#94a3b8', font: { size: 11 } } }
+                        }
                     },
-                    plugins: [pluginIkon(ikon)]
+                    plugins: [pluginLabel]
                 });
             };
 
             const ctxLead = document.getElementById('chartLeadTime');
-            if (ctxLead) chartLeadTimeInstance = buatGaris(ctxLead, chartLeadTimeInstance, 'Trend Rata-Rata Lead Time per Hari', 'Rata-Rata Lead Time (Hari)', leadValues, '#dc3545', ikonLead);
+            if (ctxLead) chartLeadTimeInstance = buatGaris(ctxLead, chartLeadTimeInstance, 'Trend Rata-Rata Lead Time per Hari', 'Lead time', leadValues, '#ef4444', ikonLead, 'hari');
             const ctxKoli = document.getElementById('chartKoli');
-            if (ctxKoli) chartKoliInstance = buatGaris(ctxKoli, chartKoliInstance, 'Trend Total Koli Terkirim per Hari', 'Total Koli Dikirim', koliValues, '#4361ee', ikonKoli);
+            if (ctxKoli) chartKoliInstance = buatGaris(ctxKoli, chartKoliInstance, 'Trend Total Koli Terkirim per Hari', 'Total koli', koliValues, '#4361ee', ikonKoli, 'koli');
         }
     
 
