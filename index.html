@@ -2896,7 +2896,7 @@
             tbody.innerHTML = databaseInternalAccounts.length ? databaseInternalAccounts.map((a,i)=>`<tr>
                 <td>${i+1}</td><td class="text-start fw-semibold">${dbSafe(a.name||'-')}</td><td>${dbSafe(a.username||'-')}</td>
                 <td><span class="badge bg-light text-dark border">${dbSafe(roleInternalText(a.role))}</span></td><td>${statusInternalText(a.status)}</td>
-                <td class="d-flex justify-content-center gap-1 flex-wrap"><button class="btn btn-sm btn-outline-primary" onclick="resetPasswordUserInternal(${i})">Password</button><button class="btn btn-sm ${a.status==='active'?'btn-outline-danger':'btn-outline-success'}" onclick="ubahStatusUserInternal(${i})">${a.status==='active'?'Nonaktifkan':'Aktifkan'}</button></td>
+                <td class="d-flex justify-content-center gap-1 flex-wrap"><button class="btn btn-sm btn-outline-primary" onclick="resetPasswordUserInternal(${i})">Password</button><button class="btn btn-sm ${a.status==='active'?'btn-outline-danger':'btn-outline-success'}" onclick="ubahStatusUserInternal(${i})">${a.status==='active'?'Nonaktifkan':'Aktifkan'}</button><button class="btn btn-sm btn-danger" title="Hapus user permanen" onclick="hapusUserInternal(${i})"><i class="fas fa-trash"></i> Hapus</button></td>
             </tr>`).join('') : '<tr><td colspan="6" class="text-muted py-4">Belum ada user internal.</td></tr>';
         }
 
@@ -2909,6 +2909,28 @@
             const { error } = await sb.from('profiles').update({ status: baru }).eq('id', account._id);
             if (error) { alert('Gagal mengubah status: ' + error.message); return; }
             await muatProfilDariServer();
+        }
+
+        async function hapusUserInternal(index) {
+            if (currentRole !== 'admin') return;
+            const account = databaseInternalAccounts[index];
+            if (!account || !account._id) return;
+            if (account._id === window.__SB_PROFILE.id) { alert('Akun yang sedang digunakan tidak dapat dihapus.'); return; }
+            const adminAktif = databaseInternalAccounts.filter(a => a.role === 'admin' && a.status === 'active');
+            if (account.role === 'admin' && account.status === 'active' && adminAktif.length <= 1) {
+                alert('Tidak bisa menghapus Admin aktif terakhir.'); return;
+            }
+            const ketik = prompt(`HAPUS PERMANEN user "${account.username}" (${roleInternalText(account.role)})?\n\nUser ini tidak akan bisa login lagi dan tidak bisa dikembalikan.\nKetik username-nya untuk konfirmasi:`, '');
+            if (ketik === null) return;
+            if (normalisasiUsername(ketik) !== normalisasiUsername(account.username)) { alert('Username tidak cocok. Penghapusan dibatalkan.'); return; }
+            const { data, error } = await sb.functions.invoke('admin-delete-user', { body: { user_id: account._id } });
+            if (error || (data && data.error)) {
+                alert('Gagal menghapus user: ' + ((data && data.error) || (error && error.message) || 'tidak diketahui') +
+                      '\n\nPastikan Edge Function "admin-delete-user" sudah di-deploy di Supabase.');
+                return;
+            }
+            await muatProfilDariServer();
+            alert(`User ${account.username} berhasil dihapus.`);
         }
 
         function bukaPilihDealerPendaftaran() {
