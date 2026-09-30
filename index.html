@@ -2923,10 +2923,10 @@
             const ketik = prompt(`HAPUS PERMANEN user "${account.username}" (${roleInternalText(account.role)})?\n\nUser ini tidak akan bisa login lagi dan tidak bisa dikembalikan.\nKetik username-nya untuk konfirmasi:`, '');
             if (ketik === null) return;
             if (normalisasiUsername(ketik) !== normalisasiUsername(account.username)) { alert('Username tidak cocok. Penghapusan dibatalkan.'); return; }
-            const { data, error } = await sb.functions.invoke('admin-delete-user', { body: { user_id: account._id } });
+            const { data, error } = await sb.functions.invoke('dynamic-api', { body: { user_id: account._id } });
             if (error || (data && data.error)) {
                 alert('Gagal menghapus user: ' + ((data && data.error) || (error && error.message) || 'tidak diketahui') +
-                      '\n\nPastikan Edge Function "admin-delete-user" sudah di-deploy di Supabase.');
+                      '\n\nPastikan Edge Function "dynamic-api" (hapus user) sudah di-deploy di Supabase.');
                 return;
             }
             await muatProfilDariServer();
