@@ -3252,18 +3252,21 @@
                 });
             };
 
-            if (currentRole === 'admin') {
-                deliveriesToday.forEach(item => {
-                    const shipment = dbText(item.shipment || item.no_sj || '-');
-                    const dealer = namaDealerItem(item);
-                    const id = `delivery_${today}_${shipment}`;
+            // Surat Jalan tepat 2 hari masih dalam proses pengantaran (belum ada foto POD) - admin & warehouse
+            const tambahSJ2Hari = () => {
+                (transaksiData || []).filter(it => isDalamPengantaran(it) && hariLewat(it) === 2).slice(0, 200).forEach(it => {
+                    const shipment = dbText(it.shipment || it.no_sj || '-');
                     list.push({
-                        id, type:'delivery', title:'Pengantaran Hari Ini',
-                        text:`Shipment ${shipment} dijadwalkan dikirim ke ${dealer}.`,
-                        detail:`Tanggal kirim ${formatDateToDisplay(item.tgl_kirim)}${item.driver ? ` • Driver: ${item.driver}` : ''}`,
-                        time:item.tgl_kirim || today, unread:true
+                        id: `proses2_${shipment}`, type: 'proses', title: 'SJ 2 Hari Masih Dalam Pengantaran',
+                        text: `Shipment ${shipment} (${namaDealerItem(it)}) sudah 2 hari masih dalam proses pengantaran.`,
+                        detail: `Tgl kirim ${formatDateToDisplay(it.tgl_kirim)}${it.driver ? ` • Driver: ${it.driver}` : ''}${it.no_faktur ? ` • Faktur: ${it.no_faktur}` : ''}`,
+                        time: tglKirimItem(it) || today, unread: true
                     });
                 });
+            };
+
+            if (currentRole === 'admin') {
+                tambahSJ2Hari();
                 // Pendaftaran akun (dealer / internal) yang menunggu persetujuan
                 try {
                     getApprovalRows().filter(r => statusApprovalRow(r) === 'pending').forEach(r => {
@@ -3278,13 +3281,14 @@
                     });
                 } catch (e) {}
                 tambahSJTelat();
-                if (!deliveriesToday.length && !list.length) {
-                    list.push({id:`summary_${today}`, type:'info', title:'Monitoring Pengantaran', text:'Belum ada data pengantaran untuk hari ini.', detail:'Inbox akan diperbarui otomatis saat data pengiriman tersedia.', time:today, unread:true});
+                if (!list.length) {
+                    list.push({id:`summary_${today}`, type:'info', title:'Monitoring Pengantaran', text:'Tidak ada surat jalan yang tertahan dalam pengantaran.', detail:'Pemberitahuan muncul otomatis jika ada SJ yang sudah 2 hari belum ada foto POD.', time:today, unread:true});
                 }
             } else if (currentRole === 'warehouse') {
+                tambahSJ2Hari();
                 tambahSJTelat();
                 if (!list.length) {
-                    list.push({id:`summary_${today}_wh`, type:'info', title:'Tidak Ada SJ Terlambat', text:'Tidak ada surat jalan yang lewat 3 hari belum kembali.', detail:'Pemberitahuan muncul otomatis jika ada SJ yang terlambat.', time:today, unread:true});
+                    list.push({id:`summary_${today}_wh`, type:'info', title:'Tidak Ada SJ Tertahan', text:'Tidak ada surat jalan yang 2 hari masih dalam pengantaran atau lewat 3 hari belum kembali.', detail:'Pemberitahuan muncul otomatis jika ada SJ yang tertahan.', time:today, unread:true});
                 }
             } else if (currentRole === 'salespart') {
                 (transaksiData || []).filter(it => sekarang - tsBaruItem(it) <= JENDELA_MS).forEach(it => {
@@ -3367,7 +3371,7 @@
         // ============================================================
         // POPUP + SUARA + NOTIFIKASI BROWSER untuk pemberitahuan baru
         // ============================================================
-        const NOTIF_TIPE_POPUP = ['sjbaru', 'pod', 'telat', 'approval'];
+        const NOTIF_TIPE_POPUP = ['sjbaru', 'pod', 'telat', 'approval', 'proses'];
         let _audioCtx = null;
 
         function notifPref() {
@@ -3436,8 +3440,8 @@
                 wrap.style.cssText = 'position:fixed;top:16px;right:16px;z-index:3000;display:flex;flex-direction:column;gap:10px;max-width:360px;width:calc(100vw - 32px);';
                 document.body.appendChild(wrap);
             }
-            const warna = jenis === 'telat' ? '#dc3545' : (jenis === 'approval' ? '#f59e0b' : '#0d6efd');
-            const ikon = ({ sjbaru: 'fa-file-circle-plus', pod: 'fa-camera', telat: 'fa-triangle-exclamation', approval: 'fa-user-clock' })[jenis] || 'fa-bell';
+            const warna = jenis === 'telat' ? '#dc3545' : ((jenis === 'approval' || jenis === 'proses') ? '#f59e0b' : '#0d6efd');
+            const ikon = ({ sjbaru: 'fa-file-circle-plus', pod: 'fa-camera', telat: 'fa-triangle-exclamation', approval: 'fa-user-clock', proses: 'fa-truck-fast' })[jenis] || 'fa-bell';
             const el = document.createElement('div');
             el.style.cssText = `background:#fff;border-left:5px solid ${warna};border-radius:12px;box-shadow:0 10px 30px rgba(15,23,42,.25);padding:12px 14px;cursor:pointer;display:flex;gap:10px;align-items:flex-start;`;
             el.innerHTML = `<i class="fas ${ikon}" style="color:${warna};margin-top:3px;"></i>
@@ -3506,7 +3510,7 @@
             listEl.innerHTML = notifications.map(n => `
                 <div class="inbox-item ${n.unread ? 'unread' : ''}" onclick="tandaiInboxDibaca('${String(n.id).replace(/'/g,"\\'")}')">
                     <div class="d-flex align-items-start gap-2">
-                        <div class="text-primary mt-1"><i class="fas ${({delivery:'fa-truck-fast', sjbaru:'fa-file-circle-plus', pod:'fa-camera', telat:'fa-triangle-exclamation', approval:'fa-user-clock'})[n.type] || 'fa-circle-info'} ${n.type === 'telat' ? 'text-danger' : ''}"></i></div>
+                        <div class="text-primary mt-1"><i class="fas ${({delivery:'fa-truck-fast', proses:'fa-truck-fast', sjbaru:'fa-file-circle-plus', pod:'fa-camera', telat:'fa-triangle-exclamation', approval:'fa-user-clock'})[n.type] || 'fa-circle-info'} ${n.type === 'telat' ? 'text-danger' : ''}"></i></div>
                         <div class="flex-grow-1">
                             <div class="d-flex justify-content-between gap-2">
                                 <div class="fw-bold text-dark">${dbSafe(n.title)} ${n.unread ? '<span class="inbox-dot"></span>' : ''}</div>
