@@ -16,7 +16,7 @@
     <!-- FontAwesome untuk Icon Modern -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Google Fonts (Inter) -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&family=Bricolage+Grotesque:wght@600;700;800&display=swap" rel="stylesheet">
     <!-- SheetJS untuk Excel Export & Import -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- Chart.js untuk Grafik Dashboard -->
@@ -595,6 +595,60 @@
             box-shadow: inset 0 -1px 0 #26324a, inset -1px 0 0 rgba(255,255,255,.06);
         }
         .table-responsive > .table > thead.table-light > tr > th { box-shadow: inset 0 -1px 0 #cbd5e1; }
+    
+        /* ============================================================
+           TEMA GEN Z: sticker / neo-pop (visual saja, logika tidak diubah)
+           ============================================================ */
+        :root { --gz-ink:#1e1b4b; --gz-violet:#7c3aed; --gz-pink:#ff4d8d; --gz-lime:#c6f432; --gz-sun:#ffd23f; --gz-bg:#f6f1ff; }
+        body { background: radial-gradient(700px 420px at 100% 0%, rgba(255,77,141,.16), transparent 60%), radial-gradient(600px 400px at 0% 100%, rgba(198,244,50,.2), transparent 60%), var(--gz-bg) !important; }
+        h1,h2,h3,h4,h5,h6,.auth-title,.table thead th { font-family:'Bricolage Grotesque','Plus Jakarta Sans','Inter',sans-serif; }
+
+        /* kolom / header tabel */
+        .table-responsive { border:2px solid var(--gz-ink) !important; border-radius:18px !important; box-shadow:4px 4px 0 var(--gz-ink); background:#fff; }
+        .card .table-responsive { box-shadow:none; }
+        .table-responsive > .table > thead > tr > th, #menu-status-pesanan thead th, #menu-approval-dealer thead th, .table thead.table-light th {
+            background:linear-gradient(135deg,#7c3aed,#c026d3 55%,#ff4d8d) !important; color:#fff !important;
+            text-transform:none !important; font-size:.82rem !important; font-weight:700 !important; letter-spacing:.01em !important;
+            border-color:rgba(255,255,255,.22) !important; box-shadow:inset 0 -3px 0 var(--gz-lime) !important; padding:13px 10px !important;
+        }
+        .table > tbody > tr > td { border-color:#ece6ff !important; }
+        .table-striped > tbody > tr:nth-of-type(odd) > * { --bs-table-bg-type:#faf7ff !important; }
+        .table tbody tr:hover, #menu-status-pesanan tbody tr:hover { background:#fff0f7 !important; }
+        .table tbody td:first-child { font-weight:700; }
+        .table-active, .table-active > td { --bs-table-bg:var(--gz-sun) !important; --bs-table-active-bg:var(--gz-sun) !important; background:#fff3b0 !important; }
+
+        /* kartu & kartu statistik */
+        .card { border:2px solid var(--gz-ink) !important; border-radius:20px !important; box-shadow:5px 5px 0 var(--gz-ink) !important; }
+        .card:hover { transform:translate(-1px,-1px); box-shadow:7px 7px 0 var(--gz-ink) !important; }
+        .card .card { box-shadow:3px 3px 0 var(--gz-ink) !important; }
+        .card.border-start.border-4, .card.border-top.border-4 { background-color:color-mix(in srgb, var(--cc) 13%, #fff) !important; background-image:none !important; }
+        .card-header { background:#fff !important; border-bottom:2px solid var(--gz-ink) !important; }
+        .card-header h5 > i:first-child { background:var(--gz-sun) !important; color:var(--gz-ink) !important; border:2px solid var(--gz-ink); border-radius:12px; }
+        .card.border-start.border-4 .card-body h3 { letter-spacing:-.03em; }
+
+        /* header halaman, sidebar */
+        #content > .d-flex.border-bottom { background:#fff !important; border:2px solid var(--gz-ink) !important; border-left:8px solid var(--gz-pink) !important; border-radius:20px; box-shadow:5px 5px 0 var(--gz-ink); }
+        .welcome-greeting { background:var(--gz-sun); color:var(--gz-ink); border:2px solid var(--gz-ink); }
+        #sidebar { background:linear-gradient(180deg,#1e1b4b 0%,#2e1065 100%); }
+        #sidebar .nav-link.active, #sidebar .nav-link.active:hover { background:linear-gradient(135deg,#ff4d8d,#7c3aed) !important; box-shadow:3px 3px 0 var(--gz-lime) !important; }
+        #sidebar .nav-link.active::before { background:var(--gz-lime); }
+        #sidebar .nav-link:hover { background:rgba(255,255,255,.1); }
+
+        /* tombol, input, badge */
+        .btn { border-radius:999px !important; font-weight:700; }
+        .btn-primary, .btn-success, .btn-danger, .btn-warning, .btn-info, .btn-dark { border:2px solid var(--gz-ink) !important; box-shadow:3px 3px 0 var(--gz-ink) !important; }
+        .btn-primary { background-image:linear-gradient(135deg,#7c3aed,#ff4d8d) !important; }
+        .btn-success { background-image:linear-gradient(135deg,#10b981,#84cc16) !important; }
+        .btn:hover { transform:translate(-1px,-1px); }
+        .btn:active { transform:translate(2px,2px); box-shadow:none !important; }
+        .form-control, .form-select { border:2px solid #d9ccff; border-radius:12px; }
+        .form-control:focus, .form-select:focus { border-color:var(--gz-violet); box-shadow:0 0 0 .2rem rgba(124,58,237,.18); }
+        .badge { border:1.5px solid var(--gz-ink); }
+        .modal-content { border:2px solid var(--gz-ink) !important; box-shadow:6px 6px 0 var(--gz-ink); }
+
+        /* kotak trend line rekap harian */
+        #menu-rekap-harian .card-body > div[style*="height:300px"] { height:340px !important; padding:14px; border:2px solid var(--gz-ink); border-radius:18px; background:linear-gradient(180deg,#fff,#faf7ff); box-shadow:4px 4px 0 var(--gz-ink); }
+        @media (prefers-reduced-motion:reduce) { .card:hover, .btn:hover { transform:none; } }
     </style>
 
 </head>
@@ -1715,15 +1769,15 @@
                                 <table class="table table-bordered table-striped align-middle text-center mb-0" style="min-width:1100px;">
                                     <thead>
                                         <tr>
-                                            <th rowspan="2" class="text-start">Tanggal</th>
-                                            <th rowspan="2">Jumlah Surat Jalan</th>
-                                            <th colspan="4">Pengiriman (Dus / Koli)</th>
-                                            <th rowspan="2">Rata-rata Lead Time</th>
-                                            <th colspan="3">Jumlah Race per Armada</th>
-                                            <th rowspan="2">Outstanding Pengantaran</th>
+                                            <th rowspan="2" class="text-start">📅 Tanggal</th>
+                                            <th rowspan="2">🧾 Jumlah Surat Jalan</th>
+                                            <th colspan="4">📦 Pengiriman (Dus / Koli)</th>
+                                            <th rowspan="2">⏱️ Rata-rata Lead Time</th>
+                                            <th colspan="3">🚚 Jumlah Race per Armada</th>
+                                            <th rowspan="2">🚧 Outstanding Pengantaran</th>
                                         </tr>
                                         <tr>
-                                            <th>Oli</th><th>Ban</th><th>Part</th><th>Total</th>
+                                            <th>🛢️ Oli</th><th>🛞 Ban</th><th>🧩 Part</th><th>✨ Total</th>
                                             <th>HSO Tetap</th><th>Armada Lain (KGP/JNE)</th><th>HSO Tidak Tetap</th>
                                         </tr>
                                     </thead>
@@ -7142,21 +7196,26 @@
             if (ctx && typeof Chart !== 'undefined') {
                 if (chartRekapInstance) chartRekapInstance.destroy();
                 chartRekapInstance = new Chart(ctx, {
+                    type: 'line',
                     data: {
                         labels: rows.map(r => formatDateToDisplay(r.tgl).slice(0, 5)),
                         datasets: [
-                            { type: 'bar', label: 'Oli', data: rows.map(r => r.oli), backgroundColor: 'rgba(245,158,11,.85)', stack: 's', yAxisID: 'y' },
-                            { type: 'bar', label: 'Ban', data: rows.map(r => r.ban), backgroundColor: 'rgba(15,23,42,.8)', stack: 's', yAxisID: 'y' },
-                            { type: 'bar', label: 'Part', data: rows.map(r => r.part), backgroundColor: 'rgba(67,97,238,.85)', stack: 's', yAxisID: 'y', borderRadius: 4 },
-                            { type: 'line', label: 'Lead time rata-rata (hari)', data: rows.map(r => r.leadN ? +(r.leadSum / r.leadN).toFixed(1) : null), borderColor: '#ef4444', backgroundColor: '#ef4444', tension: .3, yAxisID: 'y1', spanGaps: true }
-                        ]
+                            { label: 'Oli', data: rows.map(r => r.oli), borderColor: '#f59e0b', backgroundColor: '#f59e0b', yAxisID: 'y' },
+                            { label: 'Ban', data: rows.map(r => r.ban), borderColor: '#06b6d4', backgroundColor: '#06b6d4', yAxisID: 'y' },
+                            { label: 'Part', data: rows.map(r => r.part), borderColor: '#7c3aed', backgroundColor: '#7c3aed', yAxisID: 'y' },
+                            { label: 'Lead time rata-rata (hari)', data: rows.map(r => r.leadN ? +(r.leadSum / r.leadN).toFixed(1) : null), borderColor: '#ff4d8d', backgroundColor: '#ff4d8d', borderDash: [6, 4], yAxisID: 'y1', spanGaps: true },
+                            { label: 'Total (klik legend untuk tampilkan)', data: rows.map(r => r.oli + r.ban + r.part), borderColor: '#16a34a', backgroundColor: '#16a34a', yAxisID: 'y', hidden: true }
+                        ].map(d => Object.assign({ type: 'line', tension: .35, borderWidth: 3, pointRadius: 4, pointHoverRadius: 7, pointBorderColor: '#fff', pointBorderWidth: 2, fill: false }, d))
                     },
                     options: {
                         responsive: true, maintainAspectRatio: false,
-                        plugins: { title: { display: true, text: 'Total Pengiriman (Dus/Koli) & Lead Time per Tanggal' } },
+                        interaction: { mode: 'index', intersect: false },
+                        plugins: {
+                            title: { display: true, text: 'Trend Pengiriman (Dus/Koli) & Lead Time per Tanggal' },
+                            legend: { labels: { usePointStyle: true, pointStyle: 'circle', boxWidth: 8 } }
+                        },
                         scales: {
-                            x: { stacked: true },
-                            y: { stacked: true, beginAtZero: true, title: { display: true, text: 'Dus / Koli' } },
+                            y: { beginAtZero: true, title: { display: true, text: 'Dus / Koli' }, grid: { color: 'rgba(124,58,237,.10)' } },
                             y1: { position: 'right', beginAtZero: true, grid: { drawOnChartArea: false }, title: { display: true, text: 'Hari' } }
                         }
                     }
