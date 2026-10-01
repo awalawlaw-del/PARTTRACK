@@ -1150,7 +1150,7 @@
                                 <div class="col-md-4">
                                     <div class="input-group input-group-sm">
                                         <span class="input-group-text bg-light"><i class="fas fa-search"></i></span>
-                                        <input type="text" class="form-control" id="searchStatusPesanan" placeholder="Cari Order / Delivery / Customer / Material / Shipment..." oninput="muatDataStatusPesanan()">
+                                        <input type="text" class="form-control" id="searchStatusPesanan" placeholder="Cari Order / Delivery / Customer / Material / Shipment..." oninput="cariStatusPesananDebounce()">
                                     </div>
                                 </div>
                                 <div class="col-md-8 text-end">
@@ -2191,7 +2191,7 @@
     // Data bersama yang disimpan di tabel app_store
     const SHARED_KEYS = [
         'gudang_driver_gps', 'gudang_db_shipment', 'gudang_db_dealer_ekspedisi', 'gudang_db_dealer_list_raw',
-        'gudang_db_giso', 'gudang_db_faktur_raw', 'gudang_db_status_pesanan', 'gudang_db_sp',
+        'gudang_db_giso', 'gudang_db_faktur_raw', 'gudang_db_sp',
         'gudang_shipment_terinput', 'gudang_transaksi', 'gudang_pengembalian_sj',
         'gudang_total_sj', 'gudang_total_do', 'gudang_belum_kembali', 'gudang_outstanding_harian'
     ];
@@ -2750,6 +2750,7 @@
         let currentPageDBDealer = 1;
         let currentPageDBGISO = 1;
         let currentPageStatusPesanan = 1;
+        let _spServer = { total: 0, totalAll: 0, seq: 0 };   // Status Pesanan dibaca dari tabel Supabase status_pesanan
         const rowsPerPage = 25;
 
         let persistentSession = JSON.parse(localStorage.getItem('gudang_persistent_session')) || {
@@ -3874,7 +3875,7 @@
 
         let databaseGISO = JSON.parse(localStorage.getItem('gudang_db_giso')) || {};
         let databaseFakturRaw = JSON.parse(localStorage.getItem('gudang_db_faktur_raw')) || [];
-        let databaseStatusPesananRaw = JSON.parse(localStorage.getItem('gudang_db_status_pesanan')) || [];
+        let databaseStatusPesananRaw = [];   // tidak dipakai lagi: data ada di tabel Supabase status_pesanan
         let databaseSP = JSON.parse(localStorage.getItem('gudang_db_sp')) || {};
         let shipmentTerinput = JSON.parse(localStorage.getItem('gudang_shipment_terinput')) || [];
         let transaksiData = JSON.parse(localStorage.getItem('gudang_transaksi')) || [];
@@ -4217,14 +4218,13 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
             el.innerHTML = `<i class="fas ${ok ? "fa-check-circle" : "fa-exclamation-circle"} me-1"></i>${dbSafe(message)}`;
         }
 
-        function persistDatabaseAll() {
+        function persistDatabaseAll(onlyType) {
             try {
                 localStorage.setItem("gudang_db_shipment", JSON.stringify(databaseMaster));
                 localStorage.setItem("gudang_db_dealer_ekspedisi", JSON.stringify(databaseDealerEkspedisi));
                 localStorage.setItem("gudang_db_dealer_list_raw", JSON.stringify(databaseDealerListRaw));
                 localStorage.setItem("gudang_db_giso", JSON.stringify(databaseGISO));
                 localStorage.setItem("gudang_db_faktur_raw", JSON.stringify(databaseFakturRaw));
-                localStorage.setItem("gudang_db_status_pesanan", JSON.stringify(databaseStatusPesananRaw));
                 localStorage.setItem("gudang_db_sp", JSON.stringify(databaseSP));
                 return true;
             } catch (err) {
@@ -4232,6 +4232,234 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
                 alert("Database gagal disimpan. Kemungkinan kapasitas penyimpanan browser sudah penuh.");
                 return false;
             }
+        }
+
+        // ============================================================
+        // HELPER UPLOAD STATUS PESANAN (kolom dicari SEKALI per file, bukan per baris)
+        // ============================================================
+        function spNorm(s) { return String(s === undefined || s === null ? "" : s).toLowerCase().replace(/[^a-z0-9]/g, ""); }
+        function spKunciNo(v) { return dbKey(v).replace(/^0+(?=\d)/, ""); }
+
+        // Sama persis dengan cara getRowValue memilih kolom (exact dulu, lalu "mengandung"), tapi hasilnya nama kolom.
+        function spResolveKolomAlias(keys, aliases) {
+            for (const k of keys) {
+                const c = String(k).trim().toLowerCase();
+                for (const p of aliases) if (c === p.toLowerCase()) return k;
+            }
+            for (const k of keys) {
+                const c = String(k).trim().toLowerCase();
+                for (const p of aliases) if (c.includes(p.toLowerCase())) return k;
+            }
+            return "";
+        }
+
+        const SP_NO_EXACT = ["customerno", "customernumber", "customercode", "nocustomer", "nomorcustomer", "kodecustomer",
+            "kodedealer", "custno", "custnumber", "custcode", "nocust", "nomorcust", "kodecust", "soldto", "soldtoparty",
+            "soldtono", "soldtocode", "customerid", "idcustomer", "kodepelanggan", "nopelanggan", "nodealer", "dealercode",
+            "dealerno", "kdcustomer", "kdcust", "kddealer"];
+        const SP_NM_EXACT = ["namacustomer", "customername", "namadealer", "dealername", "customerdescription", "namacust",
+            "custname", "soldtoname", "soldtopartyname", "namapelanggan", "pelanggan", "name1", "namatoko", "customernm",
+            "namacustomer1", "customer", "dealer", "customer1"];
+
+        // Cari kolom Nomor Customer & Nama Customer. keys = daftar header, sampleRows = contoh baris untuk cek isi kolom.
+        function spPetaKolomCustomer(keys, sampleRows) {
+            const isAngka = (col) => {
+                let isi = 0, angka = 0;
+                for (const r of sampleRows) {
+                    const v = String((r && r[col]) === undefined || (r && r[col]) === null ? "" : r[col]).trim();
+                    if (!v) continue;
+                    isi++;
+                    if (/^[0-9.\-\s]+$/.test(v)) angka++;
+                }
+                return isi > 0 && angka / isi >= 0.8;
+            };
+            let no = "", nm = "";
+            for (const k of keys) { if (!no && SP_NO_EXACT.includes(spNorm(k))) no = k; }
+            for (const k of keys) { if (!nm && k !== no && SP_NM_EXACT.includes(spNorm(k))) nm = k; }
+            // Header ambigu ("Customer"/"Dealer") tapi isinya angka semua -> itu kolom nomor, bukan nama
+            if (nm && isAngka(nm)) { if (!no) no = nm; nm = ""; }
+            // Cadangan: tebak dari header yang memuat cust / dealer / sold / pelanggan
+            if (!no || !nm) {
+                for (const k of keys) {
+                    if (k === no || k === nm) continue;
+                    const n = spNorm(k);
+                    if (!/(cust|dealer|sold|pelanggan)/.test(n)) continue;
+                    const jenisNama = /(name|nama|nm|desc)/.test(n);
+                    const jenisNo = /((no|nomor|number|num|code|kode|kd|id)$|^(no|nomor|kode|kd))/.test(n);
+                    if (!nm && (jenisNama || (!jenisNo && !isAngka(k)))) nm = k;
+                    else if (!no && (jenisNo || (!jenisNama && isAngka(k)))) no = k;
+                }
+            }
+            return { no: no, nm: nm };
+        }
+
+        function spPetaKolom(rows) {
+            const keySet = new Set();
+            const sample = rows.slice(0, 100);
+            sample.slice(0, 50).forEach(r => Object.keys(r).forEach(k => keySet.add(k)));
+            const keys = [...keySet];
+            const cust = spPetaKolomCustomer(keys, sample);
+            return {
+                order: spResolveKolomAlias(keys, ["nomor order", "no order", "order no", "order number", "nomor pesanan", "no pesanan", "sales order", "sales order no", "so no", "so number", "order"]),
+                delivery: spResolveKolomAlias(keys, ["nomor delivery", "no delivery", "delivery no", "delivery number", "delivery"]),
+                custNo: cust.no,
+                custName: cust.nm,
+                material: spResolveKolomAlias(keys, ["material", "material no", "material number", "part number", "part no", "kode material"]),
+                description: spResolveKolomAlias(keys, ["description", "material description", "deskripsi", "nama material", "item description"]),
+                qty: spResolveKolomAlias(keys, ["qty", "quantity", "order qty", "quantity order", "jumlah", "jumlah qty"]),
+                shipmentDate: spResolveKolomAlias(keys, ["shipment date", "tanggal shipment", "tgl shipment", "ship date", "tanggal kirim"]),
+                billing: spResolveKolomAlias(keys, ["billing no", "billing number", "no billing", "nomor billing", "billing", "no faktur", "nomor faktur", "faktur"]),
+                shipment: spResolveKolomAlias(keys, ["shipment no", "shipment number", "no shipment", "nomor shipment", "shipment", "no sj", "surat jalan", "no surat jalan"]),
+                keys: keys
+            };
+        }
+
+        // Peta bantu untuk melengkapi customer yang kosong: dari DB Dealer (no <-> nama) dan DB Shipment (shipment -> nama)
+        function spBuatLookupCustomer() {
+            const noKeNama = new Map(), namaKeNo = new Map(), shipKeNama = new Map();
+            (databaseDealerListRaw || []).forEach(item => {
+                let f; try { f = getDealerMasterFields(item); } catch (e) { return; }
+                const no = dbText(f.customerNo), nm = dbText(f.dealerName);
+                if (!no || !nm) return;
+                const kn = spKunciNo(no);
+                if (!noKeNama.has(kn)) noKeNama.set(kn, nm);
+                const km = dbKey(nm);
+                if (!namaKeNo.has(km)) namaKeNo.set(km, new Set());
+                namaKeNo.get(km).add(no);
+            });
+            Object.keys(databaseMaster || {}).forEach(k => {
+                const it = databaseMaster[k];
+                const nm = dbText(it && (it.nama_customer || it.customer));
+                if (nm) shipKeNama.set(dbKey(k), nm);
+            });
+            return { noKeNama: noKeNama, namaKeNo: namaKeNo, shipKeNama: shipKeNama };
+        }
+
+        function spLengkapiCustomer(no, nm, shipNo, L) {
+            no = dbText(no); nm = dbText(nm);
+            if (!nm && no) nm = L.noKeNama.get(spKunciNo(no)) || "";
+            if (!nm && shipNo) nm = L.shipKeNama.get(dbKey(shipNo)) || "";
+            if (!no && nm) {
+                const s = L.namaKeNo.get(dbKey(nm));
+                if (s && s.size === 1) no = [...s][0];   // hanya jika nama dealer unik
+            }
+            return { no: no, nm: nm };
+        }
+
+        // ============================================================
+        // UPLOAD STATUS PESANAN -> tabel Supabase `status_pesanan`
+        // Dikirim per 1.000 baris. Setelah semua terkirim, server membuang data lama dengan nomor order
+        // yang sama (sp_selesai_upload). Bila gagal di tengah jalan, kiriman dibatalkan dan data lama aman.
+        // ============================================================
+        async function uploadStatusPesananKeServer(rows, input) {
+            const type = "StatusPesanan";
+            const prof = window.__SB_PROFILE;
+            if (!prof || prof.role !== 'admin') {
+                setUploadStatus(type, "Hanya Admin Gudang yang boleh upload.", false);
+                alert("Hanya Admin Gudang yang boleh upload DB Status Pesanan.");
+                return;
+            }
+
+            const kolom = spPetaKolom(rows);
+            const val = (row, col) => {
+                if (!col) return "";
+                const v = row[col];
+                return (v === undefined || v === null) ? "" : String(v).trim();
+            };
+            const L = spBuatLookupCustomer();
+            const batchId = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+            const tanggal = getUploadedDate({ _uploadedAt: Date.now() });
+            const records = [];
+            let skipped = 0, dariDBLain = 0, kosongNo = 0, kosongNama = 0;
+
+            rows.forEach((row, rowIndex) => {
+                const nomorOrder = val(row, kolom.order);
+                const nomorDelivery = val(row, kolom.delivery);
+                let nomorCustomer = val(row, kolom.custNo);
+                let namaCustomer = val(row, kolom.custName);
+                const material = val(row, kolom.material);
+                const description = val(row, kolom.description);
+                const qty = val(row, kolom.qty);
+                const shipmentDate = val(row, kolom.shipmentDate);
+                const billingNo = val(row, kolom.billing);
+                const shipmentNo = val(row, kolom.shipment);
+
+                if (!nomorOrder && !nomorDelivery && !nomorCustomer && !namaCustomer && !material && !description && !qty && !shipmentDate && !billingNo && !shipmentNo) {
+                    skipped++;
+                    return;
+                }
+                if (!nomorCustomer || !namaCustomer) {
+                    const f = spLengkapiCustomer(nomorCustomer, namaCustomer, shipmentNo, L);
+                    if ((f.no && !nomorCustomer) || (f.nm && !namaCustomer)) dariDBLain++;
+                    nomorCustomer = f.no; namaCustomer = f.nm;
+                }
+                if (!nomorCustomer) kosongNo++;
+                if (!namaCustomer) kosongNama++;
+
+                records.push({
+                    nomor_order: nomorOrder, nomor_delivery: nomorDelivery,
+                    nomor_customer: nomorCustomer, nama_customer: namaCustomer,
+                    material: material, description: description, qty: qty,
+                    shipment_date: shipmentDate, billing_no: billingNo, shipment_no: shipmentNo,
+                    batch_id: batchId, row_no: rowIndex, tanggal_upload: tanggal
+                });
+            });
+
+            if (!records.length) {
+                setUploadStatus(type, "File tidak berisi data yang bisa dibaca.", false);
+                alert("File tidak berisi baris data yang bisa dibaca.");
+                return;
+            }
+
+            const total = records.length;
+            const UKURAN = 1000;
+            const fmt = (n) => Number(n).toLocaleString("id-ID");
+            let diganti = 0;
+            try {
+                let terkirim = 0;
+                for (let i = 0; i < total; i += UKURAN) {
+                    const chunk = records.slice(i, i + UKURAN);
+                    let ok = false, lastErr = null;
+                    for (let p = 1; p <= 3 && !ok; p++) {
+                        // upsert + abaikan duplikat: kiriman ulang paket yang sama tidak membuat data ganda
+                        const { error } = await sb.from('status_pesanan').upsert(chunk, { onConflict: 'batch_id,row_no', ignoreDuplicates: true });
+                        if (!error) ok = true;
+                        else { lastErr = error; await new Promise(r => setTimeout(r, 1500 * p)); }
+                    }
+                    if (!ok) throw lastErr;
+                    terkirim += chunk.length;
+                    setUploadStatus(type, `Mengirim ke server... ${fmt(terkirim)} / ${fmt(total)}`, true);
+                }
+                const { data: n, error: eSelesai } = await sb.rpc('sp_selesai_upload', { p_batch: batchId });
+                if (eSelesai) throw eSelesai;
+                diganti = Number(n) || 0;
+            } catch (err) {
+                console.error("Upload Status Pesanan gagal:", err);
+                try { await sb.from('status_pesanan').delete().eq('batch_id', batchId); } catch (e) {}
+                const msg = (err && err.message) ? err.message : String(err);
+                const belumAdaTabel = /status_pesanan|schema cache|does not exist|sp_selesai_upload/i.test(msg);
+                setUploadStatus(type, "Upload gagal: " + msg, false);
+                alert("Upload Status Pesanan gagal.\n\n" + msg + "\n\n" +
+                    (belumAdaTabel ? "Kemungkinan tabel/fungsi belum dibuat: jalankan file supabase_status_pesanan.sql di Supabase SQL Editor.\n\n" : "") +
+                    "Kiriman dari file ini sudah dibatalkan. Data lama tetap aman.");
+                return;
+            }
+
+            input.value = "";
+            currentPageStatusPesanan = 1;
+            const info = "Kolom customer terbaca: No = " + (kolom.custNo || "tidak ditemukan") +
+                ", Nama = " + (kolom.custName || "tidak ditemukan") +
+                (dariDBLain ? " | dilengkapi dari DB Dealer/Shipment: " + fmt(dariDBLain) + " baris" : "") +
+                ((kosongNo || kosongNama) ? " | masih kosong: No " + fmt(kosongNo) + ", Nama " + fmt(kosongNama) + " baris" : "");
+            setUploadStatus(type, `${fmt(total)} data baru • ${fmt(diganti)} data lama diganti • ${fmt(skipped)} dilewati • ${info}`, true);
+            await muatDataStatusPesanan();
+            try { updateDatabaseStatusUI(); } catch (e) {}
+            alert(
+                `DB ${type} berhasil diproses!\n\n` +
+                `Data baru: ${fmt(total)}\n` +
+                `Data lama yang diganti (nomor order sama): ${fmt(diganti)}\n` +
+                `Data dilewati: ${fmt(skipped)}\n\n` + info
+            );
         }
 
         function normalizeRowsFromSheet(workbook, type) {
@@ -4246,11 +4474,24 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
                 if (found) sheetName = found;
             }
             const ws = workbook.Sheets[sheetName];
-            return XLSX.utils.sheet_to_json(ws, {
-                defval: "",
-                raw: false,
-                blankrows: false
-            }).filter(row => row && Object.keys(row).some(k => dbText(row[k]) !== ""));
+            const optJson = { defval: "", raw: false, blankrows: false };
+            if (type === "StatusPesanan" && ws && ws["!ref"]) {
+                // Header kadang bukan di baris 1 (ada judul/baris kosong di atas). Cari baris yang paling mirip header.
+                try {
+                    const rg = XLSX.utils.decode_range(ws["!ref"]);
+                    const top = XLSX.utils.encode_range({ s: { r: rg.s.r, c: rg.s.c }, e: { r: Math.min(rg.s.r + 9, rg.e.r), c: rg.e.c } });
+                    const head = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "", raw: false, blankrows: true, range: top });
+                    const token = ["order", "delivery", "customer", "cust", "dealer", "material", "qty", "shipment", "billing", "description", "nomor"];
+                    const skor = (r) => r.reduce((n, c) => {
+                        const t = String(c).toLowerCase();
+                        return n + ((t && t.length < 40 && token.some(x => t.includes(x))) ? 1 : 0);
+                    }, 0);
+                    let best = 0, bestSkor = head.length ? skor(head[0]) : 0;
+                    for (let i = 1; i < head.length; i++) { const s = skor(head[i]); if (s > bestSkor) { best = i; bestSkor = s; } }
+                    if (best > 0) optJson.range = rg.s.r + best;
+                } catch (e) { console.warn("Deteksi header gagal, pakai baris 1", e); }
+            }
+            return XLSX.utils.sheet_to_json(ws, optJson).filter(row => row && Object.keys(row).some(k => dbText(row[k]) !== ""));
         }
 
         function uploadDB(type) {
@@ -4265,6 +4506,8 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
             const reader = new FileReader();
 
             reader.onload = function(e) {
+                setUploadStatus(type, "Memproses file, mohon tunggu...", true);
+                setTimeout(async function() {
                 try {
                     const workbook = XLSX.read(e.target.result, {
                         type: "array",
@@ -4279,6 +4522,11 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
                         return;
                     }
 
+                    if (type === "StatusPesanan") {
+                        await uploadStatusPesananKeServer(rows, input);
+                        return;
+                    }
+
                     // Satu kali klik upload = satu PERIODE/BATCH upload.
                     // Duplicate dalam file/batch yang sama TIDAK dihapus.
                     // Penggantian hanya berlaku terhadap data dari batch upload sebelumnya.
@@ -4286,7 +4534,7 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
                     const result = processUploadedDatabase(type, rows, uploadBatchId);
                     if (!result) return;
 
-                    if (!persistDatabaseAll()) return;
+                    if (!persistDatabaseAll(type)) return;
 
                     input.value = "";
                     updateDatabaseStatusUI();
@@ -4294,7 +4542,7 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
 
                     setUploadStatus(
                         type,
-                        `${result.inserted} data baru • ${result.replaced} data diperbarui • ${result.skipped} dilewati`,
+                        `${result.inserted} data baru • ${result.replaced} data diperbarui • ${result.skipped} dilewati` + (result.info ? " • " + result.info : ""),
                         true
                     );
 
@@ -4303,6 +4551,7 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
                         `Data baru: ${result.inserted}\n` +
                         `Data diperbarui/duplicate: ${result.replaced}\n` +
                         `Data dilewati: ${result.skipped}\n\n` +
+                        (result.info ? result.info + `\n\n` : ``) +
                         `Jika ada duplicate, data dari file terbaru otomatis menggantikan data lama.`
                     );
                 } catch (err) {
@@ -4310,6 +4559,7 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
                     setUploadStatus(type, "Gagal membaca file: " + err.message, false);
                     alert("Gagal membaca database. Pastikan file Excel/CSV valid dan header kolom sesuai.");
                 }
+                }, 40);
             };
 
             reader.onerror = function() {
@@ -4323,6 +4573,7 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
         function processUploadedDatabase(type, rows, uploadBatchId = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`) {
             const now = Date.now();
             let inserted = 0, replaced = 0, skipped = 0;
+            let infoUpload = "";
 
             if (type === "Faktur") {
                 rows.forEach((row, rowIndex) => {
@@ -4506,92 +4757,59 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
                 // DB STATUS PESANAN
                 // Kunci duplicate = NOMOR ORDER.
                 //
-                // ATURAN PENTING:
-                // - Duplicate nomor order DALAM 1 FILE/BATCH upload yang sama
-                //   dibiarkan apa adanya, karena memang bisa valid.
-                // - Saat upload batch BARU, seluruh record batch LAMA dengan
-                //   nomor order yang sama dibuang, lalu seluruh record dari
-                //   batch BARU dimasukkan.
-                // - Dengan begitu, upload hari ini tidak menghapus duplicate
-                //   yang memang ada di file hari ini.
+                // ATURAN (tidak berubah):
+                // - Duplicate nomor order DALAM 1 file/batch upload dibiarkan apa adanya.
+                // - Saat upload batch BARU, record batch LAMA dengan nomor order yang sama dibuang,
+                //   lalu seluruh record batch BARU dimasukkan.
+                //
+                // PERBAIKAN PERFORMA:
+                // - Kolom dicari sekali per file (bukan per baris).
+                // - Hanya kolom yang dipakai tampilan yang disimpan (tidak lagi menyalin seluruh kolom Excel),
+                //   sehingga data jauh lebih kecil untuk disimpan/dikirim ke server.
+                // PERBAIKAN CUSTOMER:
+                // - Pencarian kolom customer lebih fleksibel, dan jika kosong dilengkapi dari DB Dealer / DB Shipment.
                 // ========================================================
+                const kolom = spPetaKolom(rows);
+                const val = (row, col) => {
+                    if (!col) return "";
+                    const v = row[col];
+                    return (v === undefined || v === null) ? "" : String(v).trim();
+                };
+                const L = spBuatLookupCustomer();
+                let dariDBLain = 0, masihKosongNama = 0, masihKosongNo = 0;
                 const incomingOrderKeys = new Set();
-
-                rows.forEach((row) => {
-                    const nomorOrder = dbText(getRowValue(row, [
-                        "nomor order", "no order", "order no", "order number",
-                        "nomor pesanan", "no pesanan", "sales order", "sales order no",
-                        "so no", "so number", "order"
-                    ]));
-                    if (nomorOrder && dbKey(nomorOrder) !== "-" && dbKey(nomorOrder) !== "NAN") {
-                        incomingOrderKeys.add(dbKey(nomorOrder));
-                    }
-                });
-
-                // Hapus hanya record dari PERIODE/BATCH LAMA yang order-nya
-                // muncul pada upload terbaru. Duplicate dalam upload terbaru
-                // sendiri tetap dipertahankan.
-                if (incomingOrderKeys.size > 0) {
-                    const before = databaseStatusPesananRaw.length;
-                    databaseStatusPesananRaw = databaseStatusPesananRaw.filter(oldItem => {
-                        const oldOrder = dbKey(oldItem.nomor_order || oldItem.no_order || oldItem.order_no || oldItem.order_number || oldItem.sales_order || oldItem.so_no || getRowValue(oldItem, [
-                            "nomor order", "no order", "order no", "order number",
-                            "nomor pesanan", "no pesanan", "sales order", "sales order no",
-                            "so no", "so number", "order"
-                        ]));
-                        const isSameOrder = oldOrder && incomingOrderKeys.has(oldOrder);
-                        const isOldBatch = oldItem._uploadBatchId !== uploadBatchId;
-                        return !(isSameOrder && isOldBatch);
-                    });
-                    replaced += before - databaseStatusPesananRaw.length;
-                }
+                const baru = [];
 
                 rows.forEach((row, rowIndex) => {
-                    const nomorOrder = dbText(getRowValue(row, [
-                        "nomor order", "no order", "order no", "order number",
-                        "nomor pesanan", "no pesanan", "sales order", "sales order no",
-                        "so no", "so number", "order"
-                    ]));
-                    const nomorDelivery = dbText(getRowValue(row, [
-                        "nomor delivery", "no delivery", "delivery no", "delivery number", "delivery"
-                    ]));
-                    const nomorCustomer = dbText(getRowValue(row, [
-                        "nomor customer", "no customer", "no. customer", "customer no", "customer no.",
-                        "customer number", "customer number.", "customerno", "kode customer", "kode dealer",
-                        "customer code", "customer code no"
-                    ]));
-                    const namaCustomer = dbText(getRowValue(row, [
-                        "nama customer", "name customer", "customer name", "customer name.",
-                        "nama dealer", "dealer", "customer", "customer description"
-                    ]));
-                    const material = dbText(getRowValue(row, [
-                        "material", "material no", "material number", "part number", "part no", "kode material"
-                    ]));
-                    const description = dbText(getRowValue(row, [
-                        "description", "material description", "deskripsi", "nama material", "item description"
-                    ]));
-                    const qty = dbText(getRowValue(row, [
-                        "qty", "quantity", "order qty", "quantity order", "jumlah", "jumlah qty"
-                    ]));
-                    const shipmentDate = dbText(getRowValue(row, [
-                        "shipment date", "tanggal shipment", "tgl shipment", "ship date", "tanggal kirim"
-                    ]));
-                    const billingNo = dbText(getRowValue(row, [
-                        "billing no", "billing number", "no billing", "nomor billing",
-                        "billing", "no faktur", "nomor faktur", "faktur"
-                    ]));
-                    const shipmentNo = dbText(getRowValue(row, [
-                        "shipment no", "shipment number", "no shipment", "nomor shipment",
-                        "shipment", "no sj", "surat jalan", "no surat jalan"
-                    ]));
+                    const nomorOrder = val(row, kolom.order);
+                    const nomorDelivery = val(row, kolom.delivery);
+                    let nomorCustomer = val(row, kolom.custNo);
+                    let namaCustomer = val(row, kolom.custName);
+                    const material = val(row, kolom.material);
+                    const description = val(row, kolom.description);
+                    const qty = val(row, kolom.qty);
+                    const shipmentDate = val(row, kolom.shipmentDate);
+                    const billingNo = val(row, kolom.billing);
+                    const shipmentNo = val(row, kolom.shipment);
 
                     if (!nomorOrder && !nomorDelivery && !nomorCustomer && !namaCustomer && !material && !description && !qty && !shipmentDate && !billingNo && !shipmentNo) {
                         skipped++;
                         return;
                     }
 
+                    if (!nomorCustomer || !namaCustomer) {
+                        const f = spLengkapiCustomer(nomorCustomer, namaCustomer, shipmentNo, L);
+                        if ((f.no && !nomorCustomer) || (f.nm && !namaCustomer)) dariDBLain++;
+                        nomorCustomer = f.no; namaCustomer = f.nm;
+                    }
+                    if (!nomorCustomer) masihKosongNo++;
+                    if (!namaCustomer) masihKosongNama++;
+
+                    if (nomorOrder && dbKey(nomorOrder) !== "-" && dbKey(nomorOrder) !== "NAN") {
+                        incomingOrderKeys.add(dbKey(nomorOrder));
+                    }
+
                     const item = {
-                        ...row,
                         nomor_order: nomorOrder,
                         nomor_delivery: nomorDelivery,
                         nomor_customer: nomorCustomer,
@@ -4602,20 +4820,45 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
                         shipment_date: shipmentDate,
                         billing_no: billingNo,
                         shipment_no: shipmentNo,
-                        // Alias lama tetap dipertahankan agar logika sistem lain
-                        // yang masih membaca shipment/billing tidak rusak.
+                        // Alias lama tetap dipertahankan agar logika sistem lain tidak rusak.
                         shipment: shipmentNo,
                         billing: billingNo,
                         _uploadedAt: now,
                         _uploadBatchId: uploadBatchId,
                         _uploadOrder: rowIndex
                     };
-
-                    // PENTING: selalu push. Jadi duplicate nomor order di
-                    // upload yang sama tetap tersimpan.
-                    databaseStatusPesananRaw.push(item);
-                    inserted++;
+                    // Kolom tanggal bawaan (dipakai fitur hapus berdasarkan tanggal) tetap dibawa bila ada
+                    if (row.tanggal !== undefined) item.tanggal = row.tanggal;
+                    if (row.tgl !== undefined) item.tgl = row.tgl;
+                    baru.push(item);
                 });
+
+                if (incomingOrderKeys.size > 0) {
+                    const before = databaseStatusPesananRaw.length;
+                    databaseStatusPesananRaw = databaseStatusPesananRaw.filter(oldItem => {
+                        const o = (oldItem.nomor_order !== undefined && oldItem.nomor_order !== null && oldItem.nomor_order !== "")
+                            ? dbKey(oldItem.nomor_order)
+                            : dbKey(oldItem.no_order || oldItem.order_no || oldItem.order_number || oldItem.sales_order || oldItem.so_no || getRowValue(oldItem, [
+                                "nomor order", "no order", "order no", "order number",
+                                "nomor pesanan", "no pesanan", "sales order", "sales order no",
+                                "so no", "so number", "order"
+                            ]));
+                        const isSameOrder = o && incomingOrderKeys.has(o);
+                        const isOldBatch = oldItem._uploadBatchId !== uploadBatchId;
+                        return !(isSameOrder && isOldBatch);
+                    });
+                    replaced += before - databaseStatusPesananRaw.length;
+                }
+
+                // PENTING: selalu masukkan semua. Duplicate nomor order di upload yang sama tetap tersimpan.
+                for (let i = 0; i < baru.length; i++) databaseStatusPesananRaw.push(baru[i]);
+                inserted += baru.length;
+
+                infoUpload = "Kolom customer terbaca: No = " + (kolom.custNo || "tidak ditemukan") +
+                    ", Nama = " + (kolom.custName || "tidak ditemukan") +
+                    (dariDBLain ? " | dilengkapi dari DB Dealer/Shipment: " + dariDBLain + " baris" : "") +
+                    ((masihKosongNo || masihKosongNama) ? " | masih kosong: No " + masihKosongNo + ", Nama " + masihKosongNama + " baris" : "");
+                console.log("[Status Pesanan] kolom terbaca:", kolom);
             }
 
             if (type === "SP") {
@@ -4641,7 +4884,7 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
                 });
             }
 
-            return { inserted, replaced, skipped };
+            return { inserted, replaced, skipped, info: infoUpload };
         }
 
         function refreshAfterDatabaseChange() {
@@ -4701,9 +4944,15 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
             } else if (type === "GISO") {
                 delete databaseGISO[dbKey(key)];
             } else if (type === "StatusPesanan") {
-                databaseStatusPesananRaw = databaseStatusPesananRaw.filter(x =>
-                    dbKey(x.shipment || x.no_shipment || x.no_sj || x.billing || x.no_faktur || x.faktur) !== dbKey(key)
-                );
+                (async () => {
+                    const k = dbText(key);
+                    const a = await sb.from('status_pesanan').delete().eq('shipment_no', k);
+                    const b = await sb.from('status_pesanan').delete().eq('billing_no', k);
+                    if (a.error || b.error) { alert("Gagal menghapus: " + ((a.error || b.error).message)); return; }
+                    await muatDataStatusPesanan();
+                    updateDatabaseStatusUI();
+                })();
+                return;
             } else if (type === "SP") {
                 delete databaseSP[dbKey(key)];
             }
@@ -4765,12 +5014,18 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
                     }
                 });
             } else if (type === "StatusPesanan") {
-                const before = databaseStatusPesananRaw.length;
-                databaseStatusPesananRaw = databaseStatusPesananRaw.filter(x => {
-                    const d = getUploadedDate(x) || getRecordDate(x, "StatusPesanan");
-                    return !inDateRange(d, start, end);
-                });
-                removed = before - databaseStatusPesananRaw.length;
+                (async () => {
+                    let q = sb.from('status_pesanan').delete({ count: 'exact' });
+                    if (start) q = q.gte('tanggal_upload', start);
+                    if (end) q = q.lte('tanggal_upload', end);
+                    const { error, count } = await q;
+                    if (error) { alert("Gagal menghapus: " + error.message); return; }
+                    currentPageStatusPesanan = 1;
+                    await muatDataStatusPesanan();
+                    updateDatabaseStatusUI();
+                    alert(`${count || 0} data ${type} berhasil dihapus.`);
+                })();
+                return;
             }
 
             persistDatabaseAll();
@@ -4829,6 +5084,8 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
                 const k = localStorage.key(i);
                 if (k && k.startsWith("gudang_")) keys.push(k);
             }
+            const { error: errSP } = await sb.from('status_pesanan').delete().gt('id', 0);
+            if (errSP && !/status_pesanan|schema cache|does not exist/i.test(errSP.message || '')) { alert('Gagal menghapus Status Pesanan di server: ' + errSP.message); return; }
             const { error: errReset } = await sb.from('app_store').delete().in('key', SHARED_KEYS);
             if (errReset) { alert('Gagal menghapus data di server: ' + errReset.message); return; }
             keys.forEach(k => localStorage.removeItem(k));
@@ -4841,7 +5098,7 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
                 Shipment: Object.keys(databaseMaster).length,
                 Dealer: databaseDealerListRaw.length,
                 GISO: Object.keys(databaseGISO).length,
-                StatusPesanan: databaseStatusPesananRaw.length,
+                StatusPesanan: _spServer.totalAll,
                 SP: Object.keys(databaseSP).length
             };
             Object.keys(counts).forEach(type => {
@@ -5372,13 +5629,39 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
         }
 
         // FUNGSI RENDER MENU STATUS PESANAN DENGAN STRUKTUR DATABASE BARU
+        // ============================================================
+        // STATUS PESANAN - DATA DIBACA DARI TABEL SUPABASE `status_pesanan`
+        // Hanya 25 baris per halaman yang diunduh. Pencarian & hitungan dikerjakan server.
+        // Dealer hanya menerima barisnya sendiri (dijaga oleh aturan RLS di server).
+        // ============================================================
+        let _spSearchTimer = null;
+        let _spTrx = null;
+
+        function cariStatusPesananDebounce() {
+            clearTimeout(_spSearchTimer);
+            _spSearchTimer = setTimeout(function () {
+                currentPageStatusPesanan = 1;
+                muatDataStatusPesanan();
+            }, 300);
+        }
+
+        function spCariTransaksi(shipmentVal) {
+            if (!_spTrx) {
+                const m = new Map();
+                (transaksiData || []).forEach(t => {
+                    const k = dbText(t.shipment).toLowerCase();
+                    if (!m.has(k)) m.set(k, t);
+                });
+                _spTrx = m;
+            }
+            return _spTrx.get(shipmentVal.toLowerCase()) || null;
+        }
+
         function getStatusPesananText(row) {
             const shipmentVal = dbText(row.shipment_no || row.shipment || row.no_shipment || row.no_sj);
             const billingVal = dbText(row.billing_no || row.billing || row.no_faktur || row.faktur);
 
-            const matchedTransaksi = shipmentVal
-                ? transaksiData.find(t => dbText(t.shipment).toLowerCase() === shipmentVal.toLowerCase())
-                : null;
+            const matchedTransaksi = shipmentVal ? spCariTransaksi(shipmentVal) : null;
 
             if (matchedTransaksi) {
                 return isDokOK(matchedTransaksi)
@@ -5392,67 +5675,65 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
             return "Pesanan Dalam Proses";
         }
 
-        function muatDataStatusPesanan() {
-            let tbody = document.getElementById('tabelStatusPesanan');
-            if (!tbody) return;
-            tbody.innerHTML = "";
+        function spPolaLike(term) {
+            return '%' + term.replace(/[\\%_]/g, function (m) { return '\\' + m; }) + '%';
+        }
 
-            let searchVal = document.getElementById('searchStatusPesanan') ? document.getElementById('searchStatusPesanan').value.trim().toLowerCase() : "";
+        function spPesanError(error) {
+            const msg = (error && error.message) ? error.message : String(error);
+            if (/status_pesanan|schema cache|does not exist/i.test(msg) || (error && error.code === '42P01')) {
+                return "Tabel status_pesanan belum dibuat di Supabase. Jalankan file supabase_status_pesanan.sql di Supabase SQL Editor.";
+            }
+            return "Gagal memuat Status Pesanan: " + msg;
+        }
 
-            let filtered = databaseStatusPesananRaw.filter(item => {
-                if (!statusPesananBolehDilihat(item)) return false;
-                const values = [
-                    item.nomor_order,
-                    item.nomor_delivery,
-                    item.nomor_customer || item.customer_no || item.customerno || getRowValue(item, [
-                        "nomor customer", "no customer", "no. customer", "customer no", "customer no.",
-                        "customer number", "customerno", "kode customer", "kode dealer", "customer code"
-                    ]),
-                    item.nama_customer || item.customer || getRowValue(item, [
-                        "nama customer", "name customer", "customer name", "nama dealer", "dealer", "customer", "customer description"
-                    ]),
-                    item.material,
-                    item.description,
-                    item.qty,
-                    item.shipment_date,
-                    item.billing_no,
-                    item.shipment_no,
-                    item.shipment,
-                    item.billing
-                ].map(v => dbText(v).toLowerCase());
-                return !searchVal || values.some(v => v.includes(searchVal));
-            });
+        async function muatDataStatusPesanan() {
+            const tbody = document.getElementById('tabelStatusPesanan');
+            if (!tbody || typeof sb === 'undefined' || !sb) return;
+            _spTrx = null;
+            const seq = ++_spServer.seq;
+            if (!tbody.children.length) {
+                tbody.innerHTML = `<tr><td colspan="11" class="empty-state"><i class="fas fa-spinner fa-spin d-block"></i>Memuat data Status Pesanan...</td></tr>`;
+            }
 
-            let startIndex = (currentPageStatusPesanan - 1) * rowsPerPage;
-            let endIndex = startIndex + rowsPerPage;
-            let paginatedData = filtered.slice(startIndex, endIndex);
+            const el = document.getElementById('searchStatusPesanan');
+            const term = el ? el.value.trim().toLowerCase() : "";
+            const from = (currentPageStatusPesanan - 1) * rowsPerPage;
 
-            if (paginatedData.length === 0) {
+            let q = sb.from('status_pesanan').select('*', { count: 'exact' });
+            if (term) q = q.ilike('cari', spPolaLike(term));
+            let res;
+            try {
+                res = await q.order('id', { ascending: true }).range(from, from + rowsPerPage - 1);
+            } catch (e) {
+                res = { error: e };
+            }
+            if (seq !== _spServer.seq) return;   // sudah ada permintaan yang lebih baru
+
+            if (res.error) {
+                console.error("Status Pesanan:", res.error);
+                tbody.innerHTML = `<tr><td colspan="11" class="empty-state"><i class="fas fa-triangle-exclamation d-block"></i>${dbSafe(spPesanError(res.error))}</td></tr>`;
+                renderPaginationStatusPesanan(0);
+                return;
+            }
+
+            const total = res.count || 0;
+            _spServer.total = total;
+            if (!term) {
+                _spServer.totalAll = total;
+                try { updateDatabaseStatusUI(); } catch (e) {}
+            }
+            const totalPages = Math.ceil(total / rowsPerPage) || 1;
+            if (currentPageStatusPesanan > totalPages) {
+                currentPageStatusPesanan = totalPages;
+                if (total > 0) return muatDataStatusPesanan();
+            }
+
+            const data = res.data || [];
+            if (data.length === 0) {
                 tbody.innerHTML = `<tr><td colspan="11" class="empty-state"><i class="fas fa-clipboard-check d-block"></i>Belum ada data Status Pesanan yang di-upload atau sesuai pencarian.</td></tr>`;
             } else {
-                paginatedData.forEach((row) => {
-                    const nomorOrder = dbText(row.nomor_order || row.no_order || row.order_no || row.order_number || row.sales_order || row.so_no || "-");
-                    const nomorDelivery = dbText(row.nomor_delivery || row.no_delivery || row.delivery || "-");
-                    const nomorCustomer = dbText(
-                        row.nomor_customer || row.customer_no || row.customerno ||
-                        getRowValue(row, [
-                            "nomor customer", "no customer", "no. customer", "customer no", "customer no.",
-                            "customer number", "customerno", "kode customer", "kode dealer", "customer code"
-                        ]) || "-"
-                    );
-                    const namaCustomer = dbText(
-                        row.nama_customer || row.customer ||
-                        getRowValue(row, [
-                            "nama customer", "name customer", "customer name", "nama dealer",
-                            "dealer", "customer", "customer description"
-                        ]) || "-"
-                    );
-                    const material = dbText(row.material || row.material_no || row.part_number || "-");
-                    const description = dbText(row.description || row.material_description || row.deskripsi || "-");
-                    const qty = dbText(row.qty || row.quantity || "-");
-                    const shipmentDate = dbText(row.shipment_date || row.tanggal_shipment || row.ship_date || "-");
-                    const billingNo = dbText(row.billing_no || row.billing || row.no_faktur || row.faktur || "-");
-                    const shipmentNo = dbText(row.shipment_no || row.shipment || row.no_shipment || row.no_sj || "-");
+                tbody.innerHTML = data.map((row) => {
                     const statusText = getStatusPesananText(row);
 
                     let badgeClass = "bg-warning text-dark";
@@ -5460,25 +5741,25 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
                     else if (statusText === "Dalam Pengantaran") badgeClass = "bg-primary";
                     else if (statusText === "Menunggu Pengiriman") badgeClass = "bg-info text-dark";
 
-                    tbody.innerHTML += `
+                    return `
                         <tr>
-                            <td class="fw-bold">${dbSafe(nomorOrder)}</td>
-                            <td>${dbSafe(nomorDelivery)}</td>
-                            <td>${dbSafe(nomorCustomer)}</td>
-                            <td>${dbSafe(namaCustomer)}</td>
-                            <td>${dbSafe(material)}</td>
-                            <td class="text-start">${dbSafe(description)}</td>
-                            <td>${dbSafe(qty)}</td>
-                            <td>${dbSafe(formatDateToDisplay(shipmentDate))}</td>
-                            <td class="text-success fw-bold">${dbSafe(billingNo)}</td>
-                            <td class="fw-bold">${dbSafe(shipmentNo)}</td>
+                            <td class="fw-bold">${dbSafe(row.nomor_order || "-")}</td>
+                            <td>${dbSafe(row.nomor_delivery || "-")}</td>
+                            <td>${dbSafe(row.nomor_customer || "-")}</td>
+                            <td>${dbSafe(row.nama_customer || "-")}</td>
+                            <td>${dbSafe(row.material || "-")}</td>
+                            <td class="text-start">${dbSafe(row.description || "-")}</td>
+                            <td>${dbSafe(row.qty || "-")}</td>
+                            <td>${dbSafe(formatDateToDisplay(row.shipment_date || "-"))}</td>
+                            <td class="text-success fw-bold">${dbSafe(row.billing_no || "-")}</td>
+                            <td class="fw-bold">${dbSafe(row.shipment_no || "-")}</td>
                             <td><span class="badge ${badgeClass} fs-6 py-1 px-3">${dbSafe(statusText)}</span></td>
                         </tr>
                     `;
-                });
+                }).join("");
             }
 
-            renderPaginationStatusPesanan(filtered.length);
+            renderPaginationStatusPesanan(total);
         }
 
         function renderPaginationStatusPesanan(totalData) {
@@ -5491,61 +5772,69 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
             let endRecord = Math.min(currentPageStatusPesanan * rowsPerPage, totalData);
             info.innerText = `Menampilkan ${startRecord} - ${endRecord} dari ${totalData} data`;
 
-            nav.innerHTML = `<li class="page-item ${currentPageStatusPesanan === 1 ? 'disabled' : ''}"><a class="page-link" href="#" onclick="ubahHalamanStatusPesanan(${currentPageStatusPesanan - 1})">Prev</a></li>`;
-            for (let i = 1; i <= totalPages; i++) {
-                nav.innerHTML += `<li class="page-item ${currentPageStatusPesanan === i ? 'active' : ''}"><a class="page-link" href="#" onclick="ubahHalamanStatusPesanan(${i})">${i}</a></li>`;
-            }
-            nav.innerHTML += `<li class="page-item ${currentPageStatusPesanan === totalPages ? 'disabled' : ''}"><a class="page-link" href="#" onclick="ubahHalamanStatusPesanan(${currentPageStatusPesanan + 1})">Next</a></li>`;
+            // Hanya tampilkan halaman 1, halaman terakhir, dan beberapa halaman di sekitar halaman aktif
+            const cur = currentPageStatusPesanan;
+            const pages = new Set([1, totalPages]);
+            for (let i = cur - 2; i <= cur + 2; i++) if (i >= 1 && i <= totalPages) pages.add(i);
+            const urut = [...pages].sort((a, b) => a - b);
+
+            let html = `<li class="page-item ${cur === 1 ? 'disabled' : ''}"><a class="page-link" href="#" onclick="ubahHalamanStatusPesanan(${cur - 1})">Prev</a></li>`;
+            let prev = 0;
+            urut.forEach(p => {
+                if (p - prev > 1) html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+                html += `<li class="page-item ${cur === p ? 'active' : ''}"><a class="page-link" href="#" onclick="ubahHalamanStatusPesanan(${p})">${p}</a></li>`;
+                prev = p;
+            });
+            html += `<li class="page-item ${cur === totalPages ? 'disabled' : ''}"><a class="page-link" href="#" onclick="ubahHalamanStatusPesanan(${cur + 1})">Next</a></li>`;
+            nav.innerHTML = html;
         }
 
         function ubahHalamanStatusPesanan(page) {
-            let searchVal = document.getElementById('searchStatusPesanan') ? document.getElementById('searchStatusPesanan').value.trim().toLowerCase() : "";
-            let filtered = databaseStatusPesananRaw.filter(item => {
-                if (!statusPesananBolehDilihat(item)) return false;
-                const values = [
-                    item.nomor_order, item.nomor_delivery,
-                    item.nomor_customer || item.customer_no || item.customerno || getRowValue(item, [
-                        "nomor customer", "no customer", "no. customer", "customer no", "customer no.",
-                        "customer number", "customerno", "kode customer", "kode dealer", "customer code"
-                    ]),
-                    item.nama_customer || item.customer || getRowValue(item, [
-                        "nama customer", "name customer", "customer name", "nama dealer", "dealer", "customer", "customer description"
-                    ]), item.material, item.description, item.qty,
-                    item.shipment_date, item.billing_no, item.shipment_no,
-                    item.shipment, item.billing
-                ].map(v => dbText(v).toLowerCase());
-                return !searchVal || values.some(v => v.includes(searchVal));
-            });
-            let totalPages = Math.ceil(filtered.length / rowsPerPage) || 1;
+            const totalPages = Math.ceil(_spServer.total / rowsPerPage) || 1;
             if (page < 1 || page > totalPages) return;
             currentPageStatusPesanan = page;
             muatDataStatusPesanan();
         }
 
-        function eksporDBStatusPesanan() {
-            if (databaseStatusPesananRaw.length === 0) {
-                alert("Tidak ada data Status Pesanan untuk diekspor!");
-                return;
+        async function eksporDBStatusPesanan() {
+            try {
+                if (typeof sbToast === 'function') sbToast('Mengambil data untuk ekspor...');
+                const semua = [];
+                const LANGKAH = 1000;
+                for (let from = 0; ; from += LANGKAH) {
+                    const { data, error } = await sb.from('status_pesanan').select('*').order('id', { ascending: true }).range(from, from + LANGKAH - 1);
+                    if (error) throw error;
+                    for (let i = 0; i < data.length; i++) semua.push(data[i]);
+                    if (data.length < LANGKAH) break;
+                }
+                if (semua.length === 0) {
+                    alert("Tidak ada data Status Pesanan untuk diekspor!");
+                    return;
+                }
+
+                _spTrx = null;
+                const dataExport = semua.map((row) => ({
+                    "Nomor Order": row.nomor_order,
+                    "Nomor Delivery": row.nomor_delivery,
+                    "Nomor Customer": row.nomor_customer,
+                    "Nama Customer": row.nama_customer,
+                    "Material": row.material,
+                    "Description": row.description,
+                    "QTY": row.qty,
+                    "Shipment Date": row.shipment_date,
+                    "Billing No": row.billing_no,
+                    "Shipment No": row.shipment_no,
+                    "Status": getStatusPesananText(row)
+                }));
+
+                let ws = XLSX.utils.json_to_sheet(dataExport);
+                let wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "Status Pesanan");
+                XLSX.writeFile(wb, `Laporan_Status_Pesanan_${getTanggalHariIniLocal()}.xlsx`);
+            } catch (err) {
+                console.error(err);
+                alert(spPesanError(err));
             }
-
-            let dataExport = databaseStatusPesananRaw.filter(statusPesananBolehDilihat).map((row) => ({
-                "Nomor Order": dbText(row.nomor_order || row.no_order || row.order_no || row.order_number || row.sales_order || row.so_no),
-                "Nomor Delivery": dbText(row.nomor_delivery || row.no_delivery || row.delivery),
-                "Nomor Customer": dbText(row.nomor_customer || row.customer_no || row.customerno),
-                "Nama Customer": dbText(row.nama_customer || row.customer),
-                "Material": dbText(row.material || row.material_no || row.part_number),
-                "Description": dbText(row.description || row.material_description || row.deskripsi),
-                "QTY": dbText(row.qty || row.quantity),
-                "Shipment Date": dbText(row.shipment_date || row.tanggal_shipment || row.ship_date),
-                "Billing No": dbText(row.billing_no || row.billing || row.no_faktur || row.faktur),
-                "Shipment No": dbText(row.shipment_no || row.shipment || row.no_shipment || row.no_sj),
-                "Status": getStatusPesananText(row)
-            }));
-
-            let ws = XLSX.utils.json_to_sheet(dataExport);
-            let wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "Status Pesanan");
-            XLSX.writeFile(wb, `Laporan_Status_Pesanan_${getTanggalHariIniLocal()}.xlsx`);
         }
 
         function renderLaporanUlang() {
