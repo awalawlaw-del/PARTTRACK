@@ -4256,10 +4256,12 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
         const SP_NO_EXACT = ["customerno", "customernumber", "customercode", "nocustomer", "nomorcustomer", "kodecustomer",
             "kodedealer", "custno", "custnumber", "custcode", "nocust", "nomorcust", "kodecust", "soldto", "soldtoparty",
             "soldtono", "soldtocode", "customerid", "idcustomer", "kodepelanggan", "nopelanggan", "nodealer", "dealercode",
-            "dealerno", "kdcustomer", "kdcust", "kddealer"];
+            "dealerno", "kdcustomer", "kdcust", "kddealer",
+            "codecostumer","nocostumer","nomorcostumer","kodecostumer","costumerno","costumercode","costumernumber","codecustomer"];
         const SP_NM_EXACT = ["namacustomer", "customername", "namadealer", "dealername", "customerdescription", "namacust",
             "custname", "soldtoname", "soldtopartyname", "namapelanggan", "pelanggan", "name1", "namatoko", "customernm",
-            "namacustomer1", "customer", "dealer", "customer1"];
+            "namacustomer1", "customer", "dealer", "customer1",
+            "namacostumer","costumername","costumer","costumername1","namacustomer"];
 
         // Cari kolom Nomor Customer & Nama Customer. keys = daftar header, sampleRows = contoh baris untuk cek isi kolom.
         function spPetaKolomCustomer(keys, sampleRows) {
@@ -4283,7 +4285,7 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
                 for (const k of keys) {
                     if (k === no || k === nm) continue;
                     const n = spNorm(k);
-                    if (!/(cust|dealer|sold|pelanggan)/.test(n)) continue;
+                    if (!/(cust|costumer|dealer|sold|pelanggan)/.test(n)) continue;
                     const jenisNama = /(name|nama|nm|desc)/.test(n);
                     const jenisNo = /((no|nomor|number|num|code|kode|kd|id)$|^(no|nomor|kode|kd))/.test(n);
                     if (!nm && (jenisNama || (!jenisNo && !isAngka(k)))) nm = k;
@@ -4380,7 +4382,12 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
                 const material = val(row, kolom.material);
                 const description = val(row, kolom.description);
                 const qty = val(row, kolom.qty);
-                const shipmentDate = val(row, kolom.shipmentDate);
+                const shipmentDate = (function (v) {
+                    // SheetJS memformat tanggal Excel sebagai m/d/yy (bulan dulu). Ubah ke dd/mm/yyyy.
+                    const m = /^(\d{1,2})\/(\d{1,2})\/(\d{2})$/.exec(v);
+                    if (!m) return v;
+                    return String(m[2]).padStart(2, "0") + "/" + String(m[1]).padStart(2, "0") + "/20" + m[3];
+                })(val(row, kolom.shipmentDate));
                 const billingNo = val(row, kolom.billing);
                 const shipmentNo = val(row, kolom.shipment);
 
