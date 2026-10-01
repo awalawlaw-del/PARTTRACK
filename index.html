@@ -1142,6 +1142,13 @@
                         <div class="card-header bg-white text-dark py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
                             <h5 class="mb-0 fw-bold"><i class="fas fa-clipboard-check text-primary me-2"></i>Monitoring Status Pesanan</h5>
                             <div class="d-flex gap-2 align-items-center flex-wrap">
+                                <div class="admin-only" style="display:none;">
+                                    <div class="d-flex gap-2 align-items-center flex-wrap">
+                                        <input type="date" id="spHapusStart" class="form-control form-control-sm" style="width: 130px;" title="Tanggal Shipment awal">
+                                        <input type="date" id="spHapusEnd" class="form-control form-control-sm" style="width: 130px;" title="Tanggal Shipment akhir">
+                                        <button class="btn btn-danger btn-sm fw-bold text-nowrap shadow-sm" onclick="hapusStatusPesananByTanggal()" title="Hapus semua pesanan dengan Shipment Date dalam rentang tanggal awal s/d akhir"><i class="fas fa-trash-alt me-1"></i> Hapus per Tanggal</button>
+                                    </div>
+                                </div>
                                 <button class="btn btn-success btn-sm fw-bold text-nowrap shadow-sm" onclick="eksporDBStatusPesanan()"><i class="fas fa-file-excel me-1"></i> Ekspor Excel</button>
                             </div>
                         </div>
@@ -1987,6 +1994,42 @@
                                 </tr>
                             </thead>
                             <tbody id="tabelModalDalamPengantaran"></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light border-top">
+                    <button type="button" class="btn btn-secondary btn-sm fw-bold" data-bs-dismiss="modal">Tutup</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DETAIL NOMOR ORDER (STATUS PESANAN) -->
+    <div class="modal fade" id="modalDetailOrder" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-xl modal-dialog-scrollable">
+            <div class="modal-content border-0 shadow-lg">
+                <div class="modal-header bg-dark text-white">
+                    <h5 class="modal-title fw-bold"><i class="fas fa-list-ul me-2"></i>Detail Nomor Order <span id="detailOrderNo"></span></h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div id="detailOrderRingkas" class="small text-muted mb-3"></div>
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-striped align-middle text-center">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>No</th>
+                                    <th>Nomor Delivery</th>
+                                    <th>Part Number (Material)</th>
+                                    <th>Description</th>
+                                    <th>QTY</th>
+                                    <th>Shipment Date</th>
+                                    <th>Billing No</th>
+                                    <th>Shipment No</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabelDetailOrder"></tbody>
                         </table>
                     </div>
                 </div>
@@ -5696,6 +5739,149 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
             return "Gagal memuat Status Pesanan: " + msg;
         }
 
+
+        // ============================================================
+        // HAPUS STATUS PESANAN PER RENTANG TANGGAL (khusus admin)
+        // Memakai kolom Shipment Date yang tampil di tabel. Tanggal dalam rentang diubah jadi daftar teks
+        // (dd/mm/yyyy, plus format lama m/d/yy) lalu dikirim ke server per 40 hari.
+        // ============================================================
+        function spDaftarTanggal(startIso, endIso) {
+            const hasil = [];
+            const a = startIso.split('-').map(Number), b = endIso.split('-').map(Number);
+            let t = Date.UTC(a[0], a[1] - 1, a[2]);
+            const akhir = Date.UTC(b[0], b[1] - 1, b[2]);
+            const p2 = (n) => String(n).padStart(2, '0');
+            for (; t <= akhir; t += 86400000) {
+                const d = new Date(t);
+                const y = d.getUTCFullYear(), m = d.getUTCMonth() + 1, dd = d.getUTCDate();
+                hasil.push([
+                    p2(dd) + '/' + p2(m) + '/' + y,                 // format baru
+                    p2(m) + '/' + p2(dd) + '/' + p2(y % 100),       // format lama 09/02/26 (bulan dulu)
+                    m + '/' + dd + '/' + p2(y % 100)                // format lama 9/2/26
+                ]);
+            }
+            return hasil;
+        }
+
+        async function hapusStatusPesananByTanggal() {
+            if (currentRole !== "admin") { alert("Fitur ini hanya untuk admin."); return; }
+            const start = document.getElementById("spHapusStart").value;
+            const end = document.getElementById("spHapusEnd").value;
+            if (!start || !end) { alert("Pilih tanggal awal dan tanggal akhir terlebih dahulu."); return; }
+            if (start > end) { alert("Tanggal awal tidak boleh lebih besar dari tanggal akhir."); return; }
+
+            const hari = spDaftarTanggal(start, end);
+            if (hari.length > 400) { alert("Rentang tanggal terlalu panjang (maksimal sekitar 13 bulan sekali hapus)."); return; }
+            const kelompok = [];
+            for (let i = 0; i < hari.length; i += 40) {
+                kelompok.push([].concat.apply([], hari.slice(i, i + 40)));
+            }
+
+            let total = 0;
+            try {
+                for (const vals of kelompok) {
+                    const { count, error } = await sb.from('status_pesanan').select('id', { count: 'exact', head: true }).in('shipment_date', vals);
+                    if (error) throw error;
+                    total += count || 0;
+                }
+            } catch (err) {
+                alert("Gagal menghitung data: " + ((err && err.message) || err));
+                return;
+            }
+            const tampil = (iso) => formatDateToDisplay(new Date(iso + "T00:00:00"));
+            if (!total) { alert(`Tidak ada pesanan dengan Shipment Date ${tampil(start)} s/d ${tampil(end)}.`); return; }
+
+            const jawab = prompt(
+                `HAPUS ${total.toLocaleString("id-ID")} baris Status Pesanan\n` +
+                `Shipment Date: ${tampil(start)} s/d ${tampil(end)}\n\n` +
+                `Data yang dihapus tidak bisa dikembalikan.\n\n` +
+                `Ketik HAPUS untuk melanjutkan:`
+            );
+            if (jawab === null) return;
+            if (String(jawab).trim().toUpperCase() !== "HAPUS") { alert("Dibatalkan. Kata konfirmasi tidak sesuai."); return; }
+
+            let terhapus = 0;
+            try {
+                for (const vals of kelompok) {
+                    const { count, error } = await sb.from('status_pesanan').delete({ count: 'exact' }).in('shipment_date', vals);
+                    if (error) throw error;
+                    terhapus += count || 0;
+                }
+            } catch (err) {
+                alert(`Penghapusan berhenti di tengah jalan (${terhapus.toLocaleString("id-ID")} baris sudah terhapus): ` + ((err && err.message) || err));
+                currentPageStatusPesanan = 1;
+                await muatDataStatusPesanan();
+                return;
+            }
+            currentPageStatusPesanan = 1;
+            await muatDataStatusPesanan();
+            try { updateDatabaseStatusUI(); } catch (e) {}
+            alert(`${terhapus.toLocaleString("id-ID")} baris Status Pesanan berhasil dihapus.`);
+        }
+
+
+        // ============================================================
+        // DETAIL NOMOR ORDER: tampilkan semua baris (part number dll) dengan nomor order yang sama
+        // ============================================================
+        async function spBukaDetailOrder(nomorOrder) {
+            const noEl = document.getElementById('detailOrderNo');
+            const ringkas = document.getElementById('detailOrderRingkas');
+            const tbody = document.getElementById('tabelDetailOrder');
+            noEl.textContent = nomorOrder;
+            ringkas.innerHTML = '';
+            tbody.innerHTML = `<tr><td colspan="9" class="empty-state"><i class="fas fa-spinner fa-spin d-block"></i>Memuat detail order...</td></tr>`;
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('modalDetailOrder')).show();
+
+            _spTrx = null;
+            let semua = [], from = 0, err = null;
+            try {
+                while (true) {
+                    const { data, error } = await sb.from('status_pesanan').select('*')
+                        .eq('nomor_order', nomorOrder).order('id', { ascending: true }).range(from, from + 999);
+                    if (error) { err = error; break; }
+                    semua = semua.concat(data || []);
+                    if (!data || data.length < 1000) break;
+                    from += 1000;
+                }
+            } catch (e) { err = e; }
+
+            if (err) {
+                tbody.innerHTML = `<tr><td colspan="9" class="empty-state"><i class="fas fa-triangle-exclamation d-block"></i>${dbSafe(spPesanError(err))}</td></tr>`;
+                return;
+            }
+            if (!semua.length) {
+                tbody.innerHTML = `<tr><td colspan="9" class="empty-state">Tidak ada data untuk nomor order ini.</td></tr>`;
+                return;
+            }
+
+            const angka = (v) => { const n = parseFloat(String(v).replace(/,/g, '')); return isNaN(n) ? 0 : n; };   // "1.000" = 1, "1,250.000" = 1250
+            const totalQty = semua.reduce((n, r) => n + angka(r.qty), 0);
+            const f = semua[0];
+            ringkas.innerHTML =
+                `<b>Customer:</b> ${dbSafe(f.nomor_customer || '-')} - ${dbSafe(f.nama_customer || '-')} &nbsp;•&nbsp; ` +
+                `<b>Jumlah baris part:</b> ${semua.length.toLocaleString('id-ID')} &nbsp;•&nbsp; ` +
+                `<b>Total QTY:</b> ${totalQty.toLocaleString('id-ID')}`;
+
+            tbody.innerHTML = semua.map((row, i) => {
+                const statusText = getStatusPesananText(row);
+                let badgeClass = "bg-warning text-dark";
+                if (statusText === "Terantar") badgeClass = "bg-success";
+                else if (statusText === "Dalam Pengantaran") badgeClass = "bg-primary";
+                else if (statusText === "Menunggu Pengiriman") badgeClass = "bg-info text-dark";
+                return `<tr>
+                    <td>${i + 1}</td>
+                    <td>${dbSafe(row.nomor_delivery || "-")}</td>
+                    <td class="fw-bold">${dbSafe(row.material || "-")}</td>
+                    <td class="text-start">${dbSafe(row.description || "-")}</td>
+                    <td>${dbSafe(row.qty || "-")}</td>
+                    <td>${dbSafe(formatDateToDisplay(row.shipment_date || "-"))}</td>
+                    <td class="text-success fw-bold">${dbSafe(row.billing_no || "-")}</td>
+                    <td class="fw-bold">${dbSafe(row.shipment_no || "-")}</td>
+                    <td><span class="badge ${badgeClass} py-1 px-2">${dbSafe(statusText)}</span></td>
+                </tr>`;
+            }).join("");
+        }
+
         async function muatDataStatusPesanan() {
             const tbody = document.getElementById('tabelStatusPesanan');
             if (!tbody || typeof sb === 'undefined' || !sb) return;
@@ -5752,7 +5938,7 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
 
                     return `
                         <tr>
-                            <td class="fw-bold">${dbSafe(row.nomor_order || "-")}</td>
+                            <td class="fw-bold">${row.nomor_order ? `<a href="#" class="text-primary text-decoration-none" title="Klik untuk lihat semua part number di order ini" onclick="event.preventDefault(); spBukaDetailOrder(decodeURIComponent('${encodeURIComponent(row.nomor_order)}'))">${dbSafe(row.nomor_order)}</a>` : "-"}</td>
                             <td>${dbSafe(row.nomor_delivery || "-")}</td>
                             <td>${dbSafe(row.nomor_customer || "-")}</td>
                             <td>${dbSafe(row.nama_customer || "-")}</td>
