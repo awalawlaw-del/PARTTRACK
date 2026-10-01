@@ -4775,11 +4775,11 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
                     const ekspedisi = dbText(getRowValue(row, [
                         "ekspedisi", "expedisi", "forwarder", "courier"
                     ]));
-                    const kontakEkspedisi = dbText(getRowValue(row, [
+                    const kontakEkspedisi = rapikanNomorKontak(getRowValue(row, [
                         "kontak ekspedisi", "no hp ekspedisi", "no. hp ekspedisi", "no telp ekspedisi", "no. telp ekspedisi",
                         "telp ekspedisi", "telepon ekspedisi", "hp ekspedisi", "wa ekspedisi", "whatsapp ekspedisi",
                         "no wa ekspedisi", "kontak expedisi", "no hp expedisi", "telp expedisi", "kontak"
-                    ]));
+                    ])) || ambilKontakEkspedisi(row);
 
                     if (!customer && !customerNo) {
                         skipped++;
@@ -5351,7 +5351,7 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
             document.getElementById("editDealerNama").value = dbText(x.nama_customer || x.customer);
             document.getElementById("editDealerNo").value = dbText(x.customer_no || x.customerno);
             document.getElementById("editDealerEkspedisi").value = dbText(x.ekspedisi || x.expedisi);
-            document.getElementById("editDealerKontak").value = dbText(x.kontak_ekspedisi);
+            document.getElementById("editDealerKontak").value = ambilKontakEkspedisi(x);
 
             // saran nama ekspedisi dari data yang sudah ada, supaya penulisan konsisten
             const set = new Set();
@@ -5407,7 +5407,7 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
                     <td class="fw-bold">${dbSafe(x.nama_customer||x.customer||"-")}</td>
                     <td>${dbSafe(x.customer_no||x.customerno||"-")}</td>
                     <td><span class="badge bg-info text-dark">${dbSafe(x.ekspedisi||x.expedisi||"-")}</span></td>
-                    <td>${dbSafe(x.kontak_ekspedisi||"-")}</td>
+                    <td>${dbSafe(ambilKontakEkspedisi(x)||"-")}</td>
                     <td><button class="btn btn-sm btn-outline-primary me-1" title="Edit ekspedisi & kontak" onclick="bukaEditDealer(${dbSafe(JSON.stringify(key))})"><i class="fas fa-pen"></i></button><button class="btn btn-sm btn-outline-danger" onclick="deleteDatabaseItem('Dealer', ${dbSafe(JSON.stringify(key))})"><i class="fas fa-trash"></i></button></td>
                 </tr>`;
             }).join(""):`<tr><td colspan="6" class="empty-state"><i class="fas fa-store d-block"></i>Tidak ada data Dealer.</td></tr>`;
@@ -5786,9 +5786,32 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
         // KONTAK EKSPEDISI: dari kolom "Kontak Ekspedisi" di DB Dealer & Ekspedisi.
         // Dicari dulu dari dealer yang bersangkutan, lalu dari dealer lain yang memakai ekspedisi yang sama.
         // ============================================================
-        function cariKontakEkspedisi(namaDealer, namaEkspedisi) {
-            const kontakDari = (it) => dbText(it && it.kontak_ekspedisi);
+        // Baca kontak ekspedisi dari satu baris DB Dealer. Tahan terhadap variasi judul kolom
+        // (spasi ganda, huruf besar/kecil, "Expedisi", "No HP", dst.) dan angka format ilmiah dari Excel.
+        function rapikanNomorKontak(v) {
+            let t = dbText(v);
+            if (/^\d+(\.\d+)?e\+?\d+$/i.test(t)) { const num = Number(t); if (isFinite(num)) t = String(Math.round(num)); }
+            return t.replace(/\.0+$/, "");
+        }
+        function ambilKontakEkspedisi(x) {
+            if (!x || typeof x !== "object") return "";
+            const langsung = rapikanNomorKontak(x.kontak_ekspedisi);
+            if (langsung) return langsung;
+            const norm = (k) => String(k).toLowerCase().replace(/[^a-z0-9]/g, "");
+            const keys = Object.keys(x).filter(k => !/^_/.test(k) && k !== "kontak_ekspedisi");
+            let k = keys.find(k => /(kontak|contact|telp|telepon|phone|hp|wa|whatsapp)/.test(norm(k)) && /(eksp|exp|forwarder|courier)/.test(norm(k)));
+            if (!k) k = keys.find(k => /^(kontak|contact|nohp|nohandphone|nowa|notelp|telp|telepon|hp|wa|whatsapp|phone)$/.test(norm(k)));
+            return k ? rapikanNomorKontak(x[k]) : "";
+        }
+
+        function cariKontakEkspedisi(namaDealer, namaEkspedisi, noCustomer) {
+            const kontakDari = (it) => ambilKontakEkspedisi(it);
             const list = databaseDealerListRaw || [];
+            const kn = dbKey(noCustomer || "").replace(/^0+(?=\d)/, "");
+            if (kn) {
+                const it = list.find(x => dbKey(x.customer_no || x.customerno || "").replace(/^0+(?=\d)/, "") === kn && kontakDari(x));
+                if (it) return kontakDari(it);
+            }
             const kd = dbKey(namaDealer || "");
             if (kd) {
                 const it = list.find(x => dbKey(x.nama_customer || x.customer || "") === kd && kontakDari(x));
@@ -5803,13 +5826,17 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
         }
 
         // Kartu "Hubungi Ekspedisi" untuk jendela detail surat jalan (muncul saat nomor SJ diklik).
-        function kontakEkspedisiBlok(namaDealer, namaEkspedisi) {
-            const kontak = cariKontakEkspedisi(namaDealer, namaEkspedisi);
-            if (!kontak) return "";
-            const nomor = String(kontak).split(/[\/,;\n]+/).map(x => x.trim()).filter(x => x.replace(/\D/g, "").length >= 6).slice(0, 3);
+        function kontakEkspedisiBlok(namaDealer, namaEkspedisi, noCustomer) {
+            const kontak = cariKontakEkspedisi(namaDealer, namaEkspedisi, noCustomer);
             const namaEksp = dbText(namaEkspedisi);
+            const judul = `<h6 class="fw-bold mb-2"><i class="fas fa-headset me-2 text-success"></i>Hubungi Ekspedisi${namaEksp && dbKey(namaEksp) !== dbKey("BELUM ADA EKSPEDISI") ? ": " + dbSafe(namaEksp) : ""}</h6>`;
+            const nomor = String(kontak || "").split(/[\/,;\n]+/).map(x => x.trim()).filter(x => x.replace(/\D/g, "").length >= 6).slice(0, 3);
             let isi;
-            if (!nomor.length) {
+            if (!kontak) {
+                // Tombol tetap tampil walau nomor belum ada, supaya pengguna tahu fitur ini tersedia.
+                isi = `<button type="button" class="btn btn-secondary btn-sm fw-bold" disabled><i class="fas fa-phone-slash me-1"></i> Hubungi Ekspedisi</button>
+                       <div class="small text-muted mt-2">Nomor kontak ekspedisi belum tersedia. Silakan hubungi Admin Gudang.</div>`;
+            } else if (!nomor.length) {
                 isi = `<div class="small">${dbSafe(kontak)}</div>`;
             } else {
                 isi = nomor.map(n => {
@@ -5818,13 +5845,13 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
                     else if (d.startsWith("8")) d = "62" + d;
                     return `<div class="d-flex align-items-center flex-wrap gap-2 mb-1">
                         <span class="fw-bold me-1">${dbSafe(n)}</span>
-                        <a class="btn btn-success btn-sm fw-bold" target="_blank" rel="noopener" href="https://wa.me/${d}"><i class="fab fa-whatsapp me-1"></i> WhatsApp</a>
+                        <a class="btn btn-success btn-sm fw-bold" target="_blank" rel="noopener" href="https://wa.me/${d}"><i class="fab fa-whatsapp me-1"></i> Hubungi via WhatsApp</a>
                         <a class="btn btn-outline-primary btn-sm fw-bold" href="tel:+${d}"><i class="fas fa-phone me-1"></i> Telepon</a>
                     </div>`;
                 }).join("");
             }
             return `<div class="text-start border rounded-3 p-3 mb-3 bg-light">
-                <h6 class="fw-bold mb-2"><i class="fas fa-headset me-2 text-success"></i>Hubungi Ekspedisi${namaEksp ? ": " + dbSafe(namaEksp) : ""}</h6>
+                ${judul}
                 ${isi}
             </div>`;
         }
@@ -6635,7 +6662,7 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
                 liveLokasiSection = `<div class="alert alert-success mb-3"><i class="fas fa-check-circle me-1"></i> ${isSPRangka(item) ? 'Surat Pengantar (SP) Rangka' : 'Driver tidak tetap / armada lain'}: keterangan <strong>OK</strong>. Tidak memerlukan Live Lokasi maupun bukti tanda terima.</div>`;
                 if (!item.podFoto) fotoSection = '';
             }
-            wrapper.innerHTML = spSection + liveLokasiSection + kontakEkspedisiBlok(item.nama_dealer, item.expedisi) + fotoSection;
+            wrapper.innerHTML = spSection + liveLokasiSection + kontakEkspedisiBlok(item.nama_dealer, item.expedisi, item.no_customer) + fotoSection;
             new bootstrap.Modal(document.getElementById('modalPreviewFoto')).show();
         }
 
