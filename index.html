@@ -1142,11 +1142,13 @@
                         <div class="card-header bg-white text-dark py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
                             <h5 class="mb-0 fw-bold"><i class="fas fa-clipboard-check text-primary me-2"></i>Monitoring Status Pesanan</h5>
                             <div class="d-flex gap-2 align-items-center flex-wrap">
+                                <input type="date" id="spHapusStart" class="form-control form-control-sm" style="width: 130px;" title="Filter Shipment Date: tanggal awal" onchange="spFilterTanggalBerubah()">
+                                <input type="date" id="spHapusEnd" class="form-control form-control-sm" style="width: 130px;" title="Filter Shipment Date: tanggal akhir" onchange="spFilterTanggalBerubah()">
+                                <button class="btn btn-outline-secondary btn-sm fw-bold text-nowrap" onclick="spResetFilterTanggal()" title="Hapus filter tanggal"><i class="fas fa-rotate-left me-1"></i> Reset</button>
                                 <div class="admin-only" style="display:none;">
                                     <div class="d-flex gap-2 align-items-center flex-wrap">
-                                        <input type="date" id="spHapusStart" class="form-control form-control-sm" style="width: 130px;" title="Tanggal Shipment awal">
-                                        <input type="date" id="spHapusEnd" class="form-control form-control-sm" style="width: 130px;" title="Tanggal Shipment akhir">
                                         <button class="btn btn-danger btn-sm fw-bold text-nowrap shadow-sm" onclick="hapusStatusPesananByTanggal()" title="Hapus semua pesanan dengan Shipment Date dalam rentang tanggal awal s/d akhir"><i class="fas fa-trash-alt me-1"></i> Hapus per Tanggal</button>
+                                        <button class="btn btn-dark btn-sm fw-bold text-nowrap shadow-sm" onclick="hapusSemuaStatusPesanan()" title="Hapus SELURUH data Status Pesanan tanpa memilih tanggal"><i class="fas fa-dumpster-fire me-1"></i> Hapus Semua</button>
                                     </div>
                                 </div>
                                 <button class="btn btn-success btn-sm fw-bold text-nowrap shadow-sm" onclick="eksporDBStatusPesanan()"><i class="fas fa-file-excel me-1"></i> Ekspor Excel</button>
@@ -5763,6 +5765,85 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
             return hasil;
         }
 
+
+        // ============================================================
+        // FILTER TANGGAL (Shipment Date) di tabel Status Pesanan + HAPUS SEMUA
+        // ============================================================
+        const SP_FILTER_MAKS_HARI = 120;
+
+        // Mengubah kolom tanggal awal/akhir jadi daftar teks tanggal untuk query. Bila hanya satu diisi -> satu hari.
+        function spFilterTanggalVals() {
+            const a = document.getElementById("spHapusStart"), b = document.getElementById("spHapusEnd");
+            let start = a ? a.value : "", end = b ? b.value : "";
+            if (!start && !end) return { vals: null, error: "" };
+            if (!start) start = end;
+            if (!end) end = start;
+            if (start > end) return { vals: null, error: "Filter tanggal: tanggal awal tidak boleh lebih besar dari tanggal akhir." };
+            const hari = spDaftarTanggal(start, end);
+            if (hari.length > SP_FILTER_MAKS_HARI) return { vals: null, error: "Filter tanggal maksimal " + SP_FILTER_MAKS_HARI + " hari sekali tampil. Persempit rentang tanggalnya." };
+            return { vals: [].concat.apply([], hari), error: "" };
+        }
+
+        function spFilterTanggalBerubah() {
+            currentPageStatusPesanan = 1;
+            muatDataStatusPesanan();
+        }
+
+        function spResetFilterTanggal() {
+            const a = document.getElementById("spHapusStart"), b = document.getElementById("spHapusEnd");
+            if (a) a.value = ""; if (b) b.value = "";
+            spFilterTanggalBerubah();
+        }
+
+        // Hapus SELURUH Status Pesanan. Dihapus per blok id supaya tidak kena batas waktu server.
+        async function hapusSemuaStatusPesanan() {
+            if (currentRole !== "admin") { alert("Fitur ini hanya untuk admin."); return; }
+            let total = 0;
+            try {
+                const { count, error } = await sb.from('status_pesanan').select('id', { count: 'exact', head: true });
+                if (error) throw error;
+                total = count || 0;
+            } catch (err) {
+                alert("Gagal menghitung data: " + ((err && err.message) || err));
+                return;
+            }
+            if (!total) { alert("Data Status Pesanan sudah kosong."); return; }
+
+            const jawab = prompt(
+                `HAPUS SEMUA ${total.toLocaleString("id-ID")} baris Status Pesanan?\n\n` +
+                `Seluruh data akan hilang dan tidak bisa dikembalikan. Tanggal tidak dipakai.\n\n` +
+                `Ketik HAPUS SEMUA untuk melanjutkan:`
+            );
+            if (jawab === null) return;
+            if (String(jawab).trim().toUpperCase() !== "HAPUS SEMUA") { alert("Dibatalkan. Kata konfirmasi tidak sesuai."); return; }
+
+            let terhapus = 0;
+            try {
+                const lo = await sb.from('status_pesanan').select('id').order('id', { ascending: true }).limit(1);
+                const hi = await sb.from('status_pesanan').select('id').order('id', { ascending: false }).limit(1);
+                if (lo.error) throw lo.error;
+                if (hi.error) throw hi.error;
+                if (lo.data && lo.data.length && hi.data && hi.data.length) {
+                    const minId = lo.data[0].id, maxId = hi.data[0].id, BLOK = 3000;
+                    for (let id = minId; id <= maxId; id += BLOK) {
+                        const { count, error } = await sb.from('status_pesanan').delete({ count: 'exact' }).gte('id', id).lt('id', id + BLOK);
+                        if (error) throw error;
+                        terhapus += count || 0;
+                        if (typeof setUploadStatus === 'function') setUploadStatus("StatusPesanan", `Menghapus... ${terhapus.toLocaleString("id-ID")} / ${total.toLocaleString("id-ID")}`, true);
+                    }
+                }
+            } catch (err) {
+                alert(`Penghapusan berhenti di tengah jalan (${terhapus.toLocaleString("id-ID")} baris sudah terhapus): ` + ((err && err.message) || err));
+                currentPageStatusPesanan = 1;
+                await muatDataStatusPesanan();
+                return;
+            }
+            currentPageStatusPesanan = 1;
+            await muatDataStatusPesanan();
+            try { updateDatabaseStatusUI(); } catch (e) {}
+            alert(`${terhapus.toLocaleString("id-ID")} baris Status Pesanan berhasil dihapus semua.`);
+        }
+
         async function hapusStatusPesananByTanggal() {
             if (currentRole !== "admin") { alert("Fitur ini hanya untuk admin."); return; }
             const start = document.getElementById("spHapusStart").value;
@@ -5897,6 +5978,13 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
 
             let q = sb.from('status_pesanan').select('*', { count: 'exact' });
             if (term) q = q.ilike('cari', spPolaLike(term));
+            const fTgl = spFilterTanggalVals();
+            if (fTgl.error) {
+                tbody.innerHTML = `<tr><td colspan="11" class="empty-state"><i class="fas fa-triangle-exclamation d-block"></i>${dbSafe(fTgl.error)}</td></tr>`;
+                renderPaginationStatusPesanan(0);
+                return;
+            }
+            if (fTgl.vals) q = q.in('shipment_date', fTgl.vals);
             let res;
             try {
                 res = await q.order('id', { ascending: true }).range(from, from + rowsPerPage - 1);
@@ -5914,7 +6002,7 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
 
             const total = res.count || 0;
             _spServer.total = total;
-            if (!term) {
+            if (!term && !fTgl.vals) {
                 _spServer.totalAll = total;
                 try { updateDatabaseStatusUI(); } catch (e) {}
             }
@@ -5994,10 +6082,14 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
         async function eksporDBStatusPesanan() {
             try {
                 if (typeof sbToast === 'function') sbToast('Mengambil data untuk ekspor...');
+                const fTglX = spFilterTanggalVals();
+                if (fTglX.error) { alert(fTglX.error); return; }
                 const semua = [];
                 const LANGKAH = 1000;
                 for (let from = 0; ; from += LANGKAH) {
-                    const { data, error } = await sb.from('status_pesanan').select('*').order('id', { ascending: true }).range(from, from + LANGKAH - 1);
+                    let qx = sb.from('status_pesanan').select('*');
+                    if (fTglX.vals) qx = qx.in('shipment_date', fTglX.vals);
+                    const { data, error } = await qx.order('id', { ascending: true }).range(from, from + LANGKAH - 1);
                     if (error) throw error;
                     for (let i = 0; i < data.length; i++) semua.push(data[i]);
                     if (data.length < LANGKAH) break;
