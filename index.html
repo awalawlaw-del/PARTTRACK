@@ -4450,7 +4450,8 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
             const info = "Kolom customer terbaca: No = " + (kolom.custNo || "tidak ditemukan") +
                 ", Nama = " + (kolom.custName || "tidak ditemukan") +
                 (dariDBLain ? " | dilengkapi dari DB Dealer/Shipment: " + fmt(dariDBLain) + " baris" : "") +
-                ((kosongNo || kosongNama) ? " | masih kosong: No " + fmt(kosongNo) + ", Nama " + fmt(kosongNama) + " baris" : "");
+                ((kosongNo || kosongNama) ? " | masih kosong: No " + fmt(kosongNo) + ", Nama " + fmt(kosongNama) + " baris" : "") +
+                ((!kolom.custNo || !kolom.custName) ? " | Sheet dibaca: \"" + (window.__spSheetName || "?") + "\" | Judul kolom di file: " + kolom.keys.slice(0, 40).join(", ") : "");
             setUploadStatus(type, `${fmt(total)} data baru • ${fmt(diganti)} data lama diganti • ${fmt(skipped)} dilewati • ${info}`, true);
             await muatDataStatusPesanan();
             try { updateDatabaseStatusUI(); } catch (e) {}
@@ -4473,6 +4474,7 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
                 });
                 if (found) sheetName = found;
             }
+            window.__spSheetName = sheetName;
             const ws = workbook.Sheets[sheetName];
             const optJson = { defval: "", raw: false, blankrows: false };
             if (type === "StatusPesanan" && ws && ws["!ref"]) {
