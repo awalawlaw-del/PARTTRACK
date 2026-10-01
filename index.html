@@ -1038,7 +1038,7 @@
                                         <label for="shipment" class="form-label fw-bold">No. Shipment / Surat Jalan <span class="text-danger">*</span></label>
                                         <div class="input-group input-group-lg">
                                             <span class="input-group-text bg-primary text-white"><i class="fas fa-barcode"></i></span>
-                                            <input type="text" class="form-control" id="shipment" placeholder="Ketik atau Scan No. Shipment lalu Enter..." required>
+                                            <input type="text" class="form-control" id="shipment" style="text-transform: uppercase;" placeholder="Ketik atau Scan No. Shipment lalu Enter..." required>
                                         </div>
                                         <div class="form-text text-primary mt-1" id="statusDBInfo"><i class="fas fa-info-circle me-1"></i>Status DB SAP: Belum di-upload</div>
                                     </div>
@@ -1475,6 +1475,11 @@
                             <h5 class="mb-0 text-dark fw-bold"><i class="fas fa-file-pen text-warning me-2"></i>Database Surat Pengantar (SP) Terupload</h5>
                             <div class="d-flex gap-2 align-items-center flex-wrap">
                                 <input type="text" class="form-control form-control-sm" id="searchDBSP" placeholder="Cari No SP / Dealer / Part..." oninput="currentPageDBSP=1; muatDBSP()">
+                                <input type="date" class="form-control form-control-sm" style="width:130px;" id="spFilterStart" title="Tanggal upload awal" onchange="currentPageDBSP=1; muatDBSP()">
+                                <input type="date" class="form-control form-control-sm" style="width:130px;" id="spFilterEnd" title="Tanggal upload akhir" onchange="currentPageDBSP=1; muatDBSP()">
+                                <select class="form-select form-select-sm" style="width:190px;" id="spFilterProgram" title="Filter Nama Program" onchange="currentPageDBSP=1; muatDBSP()"><option value="">Semua Program</option></select>
+                                <button class="btn btn-outline-secondary btn-sm fw-bold text-nowrap" onclick="resetFilterDBSP()" title="Hapus semua filter"><i class="fas fa-rotate-left me-1"></i> Reset</button>
+                                <button class="btn btn-danger btn-sm fw-bold text-nowrap" onclick="hapusDBSPSesuaiFilter()" title="Hapus semua SP yang sesuai filter tanggal upload dan/atau program"><i class="fas fa-filter-circle-xmark me-1"></i> Hapus Sesuai Filter</button>
                                 <button class="btn btn-danger btn-sm fw-bold text-nowrap" onclick="resetDBSP()"><i class="fas fa-trash me-1"></i> Kosongkan</button>
                                 <button class="btn btn-success btn-sm fw-bold shadow-sm text-nowrap" onclick="eksporDBSP()"><i class="fas fa-file-excel me-1"></i> Ekspor</button>
                             </div>
@@ -1600,6 +1605,7 @@
                                             <th>Nama Customer</th>
                                             <th>CustomerNo</th>
                                             <th>EKSPEDISI</th>
+                                            <th>KONTAK EKSPEDISI</th>
                                             <th>Aksi</th>
                                         </tr>
                                     </thead>
@@ -1856,6 +1862,7 @@
                                     <h5 class="card-title fw-bold text-info fs-6 mb-3">3. DB Dealer & Ekspedisi</h5>
                                     <input class="form-control form-control-sm mb-3" type="file" id="fileDealer" accept=".xlsx, .xls, .csv">
                                     <button type="button" class="btn btn-info btn-sm w-100 fw-bold text-white shadow-sm" onclick="uploadDB('Dealer')"><i class="fas fa-cloud-upload-alt me-1"></i> Simpan / Update</button>
+                                    <div class="small text-muted mt-2"><i class="fas fa-phone me-1"></i>Opsional: tambah kolom <b>Kontak Ekspedisi</b> (nomor HP/WA) agar dealer bisa menghubungi ekspedisi.</div>
                                     <div class="upload-status text-muted mt-2" id="statusUploadDealer"></div>
                                 </div>
                             </div>
@@ -2037,6 +2044,43 @@
                 </div>
                 <div class="modal-footer bg-light border-top">
                     <button type="button" class="btn btn-secondary btn-sm fw-bold" data-bs-dismiss="modal">Tutup</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL EDIT DEALER & EKSPEDISI -->
+    <div class="modal fade" id="modalEditDealer" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg">
+                <div class="modal-header bg-info text-dark">
+                    <h5 class="modal-title fw-bold"><i class="fas fa-pen me-2"></i>Edit Ekspedisi Dealer</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <input type="hidden" id="editDealerKey">
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-muted mb-1">Nama Customer</label>
+                        <input type="text" class="form-control form-control-sm" id="editDealerNama" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-muted mb-1">Customer No</label>
+                        <input type="text" class="form-control form-control-sm" id="editDealerNo" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold mb-1">Ekspedisi</label>
+                        <input type="text" class="form-control" id="editDealerEkspedisi" list="daftarEkspedisiEdit" placeholder="Pilih atau ketik nama ekspedisi baru" autocomplete="off">
+                        <datalist id="daftarEkspedisiEdit"></datalist>
+                    </div>
+                    <div class="mb-1">
+                        <label class="form-label small fw-bold mb-1">Kontak Ekspedisi (HP/WA)</label>
+                        <input type="text" class="form-control" id="editDealerKontak" placeholder="mis. 0812xxxxxxx (beberapa nomor pisahkan dengan /)" autocomplete="off">
+                    </div>
+                    <div class="small text-muted mt-3"><i class="fas fa-info-circle me-1"></i>Perubahan berlaku untuk pengiriman berikutnya. Data pengiriman yang sudah tercatat tidak ikut berubah. Upload ulang file DB Dealer akan menimpa hasil edit ini.</div>
+                </div>
+                <div class="modal-footer bg-light border-top">
+                    <button type="button" class="btn btn-secondary btn-sm fw-bold" data-bs-dismiss="modal">Batal</button>
+                    <button type="button" class="btn btn-primary btn-sm fw-bold" onclick="simpanEditDealer()"><i class="fas fa-save me-1"></i> Simpan</button>
                 </div>
             </div>
         </div>
@@ -4731,6 +4775,11 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
                     const ekspedisi = dbText(getRowValue(row, [
                         "ekspedisi", "expedisi", "forwarder", "courier"
                     ]));
+                    const kontakEkspedisi = dbText(getRowValue(row, [
+                        "kontak ekspedisi", "no hp ekspedisi", "no. hp ekspedisi", "no telp ekspedisi", "no. telp ekspedisi",
+                        "telp ekspedisi", "telepon ekspedisi", "hp ekspedisi", "wa ekspedisi", "whatsapp ekspedisi",
+                        "no wa ekspedisi", "kontak expedisi", "no hp expedisi", "telp expedisi", "kontak"
+                    ]));
 
                     if (!customer && !customerNo) {
                         skipped++;
@@ -4742,6 +4791,7 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
                         nama_customer: customer,
                         customer_no: customerNo,
                         ekspedisi: ekspedisi,
+                        kontak_ekspedisi: kontakEkspedisi,
                         _uploadedAt: now,
                         _uploadOrder: rowIndex
                     };
@@ -5226,7 +5276,7 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
                     <td>${pageStart + i + 1}</td>
                     <td class="fw-bold text-primary">${dbSafe(x.no_faktur || "-")}</td>
                     <td>${dbSafe(formatDateToDisplay(x.tgl_faktur))}</td>
-                    <td><button class="btn btn-sm btn-outline-danger" onclick="deleteDatabaseItem('Faktur', ${JSON.stringify(dbText(x.no_faktur))})"><i class="fas fa-trash"></i></button></td>
+                    <td><button class="btn btn-sm btn-outline-danger" onclick="deleteDatabaseItem('Faktur', ${dbSafe(JSON.stringify(dbText(x.no_faktur)))})"><i class="fas fa-trash"></i></button></td>
                 </tr>`).join("") :
                 `<tr><td colspan="4" class="empty-state"><i class="fas fa-database d-block"></i>Tidak ada data Faktur.</td></tr>`;
 
@@ -5267,7 +5317,7 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
                     <td>${dbSafe(x.ekspedisi || "-")}</td>
                     <td>${dbSafe(x.jenis_kemasan || "-")}</td>
                     <td><span class="badge bg-primary">${dbSafe(x.jumlah_koli || 0)}</span></td>
-                    <td><button class="btn btn-sm btn-outline-danger" onclick="deleteDatabaseItem('Shipment', ${JSON.stringify(x._key)})"><i class="fas fa-trash"></i></button></td>
+                    <td><button class="btn btn-sm btn-outline-danger" onclick="deleteDatabaseItem('Shipment', ${dbSafe(JSON.stringify(x._key))})"><i class="fas fa-trash"></i></button></td>
                 </tr>`).join("") :
                 `<tr><td colspan="8" class="empty-state"><i class="fas fa-database d-block"></i>Tidak ada data Surat Jalan.</td></tr>`;
 
@@ -5280,6 +5330,57 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
             if(page<1 || page>totalPages) return;
             currentPageDBShipment=page;
             muatDBShipment();
+        }
+
+
+        // ============================================================
+        // EDIT DEALER & EKSPEDISI (ganti ekspedisi / kontak per dealer)
+        // ============================================================
+        function cariItemDealer(key) {
+            const k = dbKey(key);
+            return databaseDealerListRaw.find(x =>
+                dbKey(x.customer_no || x.customerno || x.customer || x.nama_customer) === k) ||
+                databaseDealerListRaw.find(x => dbKey(x.customer_no || x.customerno || x.nama_customer || x.customer) === k);
+        }
+
+        function bukaEditDealer(key) {
+            if (currentRole !== "admin") { alert("Fitur ini hanya untuk admin."); return; }
+            const x = cariItemDealer(key);
+            if (!x) { alert("Data dealer tidak ditemukan."); return; }
+            document.getElementById("editDealerKey").value = key;
+            document.getElementById("editDealerNama").value = dbText(x.nama_customer || x.customer);
+            document.getElementById("editDealerNo").value = dbText(x.customer_no || x.customerno);
+            document.getElementById("editDealerEkspedisi").value = dbText(x.ekspedisi || x.expedisi);
+            document.getElementById("editDealerKontak").value = dbText(x.kontak_ekspedisi);
+
+            // saran nama ekspedisi dari data yang sudah ada, supaya penulisan konsisten
+            const set = new Set();
+            databaseDealerListRaw.forEach(it => { const e = dbText(it.ekspedisi || it.expedisi); if (e && dbKey(e) !== dbKey("BELUM ADA EKSPEDISI")) set.add(e); });
+            document.getElementById("daftarEkspedisiEdit").innerHTML = [...set].sort((a, b) => a.localeCompare(b)).map(e => `<option value="${dbSafe(e)}"></option>`).join("");
+
+            bootstrap.Modal.getOrCreateInstance(document.getElementById("modalEditDealer")).show();
+        }
+
+        function simpanEditDealer() {
+            if (currentRole !== "admin") { alert("Fitur ini hanya untuk admin."); return; }
+            const key = document.getElementById("editDealerKey").value;
+            const x = cariItemDealer(key);
+            if (!x) { alert("Data dealer tidak ditemukan."); return; }
+            const eksp = dbText(document.getElementById("editDealerEkspedisi").value);
+            const kontak = dbText(document.getElementById("editDealerKontak").value);
+            if (!eksp) { alert("Nama ekspedisi tidak boleh kosong."); return; }
+
+            x.ekspedisi = eksp;
+            x.kontak_ekspedisi = kontak;
+            // kolom asli dari file Excel ikut diselaraskan agar tidak membingungkan bila terbaca di tempat lain
+            if (x.expedisi !== undefined) x.expedisi = eksp;
+
+            rebuildDealerExpeditionMap();
+            if (!persistDatabaseAll()) return;
+            try { updateDatabaseStatusUI(); } catch (e) {}
+            try { muatDBDealer(); } catch (e) {}
+            bootstrap.Modal.getOrCreateInstance(document.getElementById("modalEditDealer")).hide();
+            alert(`Ekspedisi ${dbText(x.nama_customer || x.customer)} berhasil diubah menjadi ${eksp}.`);
         }
 
         function muatDBDealer() {
@@ -5306,9 +5407,10 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
                     <td class="fw-bold">${dbSafe(x.nama_customer||x.customer||"-")}</td>
                     <td>${dbSafe(x.customer_no||x.customerno||"-")}</td>
                     <td><span class="badge bg-info text-dark">${dbSafe(x.ekspedisi||x.expedisi||"-")}</span></td>
-                    <td><button class="btn btn-sm btn-outline-danger" onclick="deleteDatabaseItem('Dealer', ${JSON.stringify(key)})"><i class="fas fa-trash"></i></button></td>
+                    <td>${dbSafe(x.kontak_ekspedisi||"-")}</td>
+                    <td><button class="btn btn-sm btn-outline-primary me-1" title="Edit ekspedisi & kontak" onclick="bukaEditDealer(${dbSafe(JSON.stringify(key))})"><i class="fas fa-pen"></i></button><button class="btn btn-sm btn-outline-danger" onclick="deleteDatabaseItem('Dealer', ${dbSafe(JSON.stringify(key))})"><i class="fas fa-trash"></i></button></td>
                 </tr>`;
-            }).join(""):`<tr><td colspan="5" class="empty-state"><i class="fas fa-store d-block"></i>Tidak ada data Dealer.</td></tr>`;
+            }).join(""):`<tr><td colspan="6" class="empty-state"><i class="fas fa-store d-block"></i>Tidak ada data Dealer.</td></tr>`;
 
             renderPager("paginationNavDBDealer","paginationInfoDBDealer",data.length,currentPageDBDealer,"ubahHalamanDBDealer");
         }
@@ -5329,12 +5431,8 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
         function muatDBSP() {
             const tbody = document.getElementById("tabelDBSP");
             if (!tbody) return;
-            const q = dbText(document.getElementById("searchDBSP")?.value).toLowerCase();
-            const data = Object.keys(databaseSP).map(k => ({ _key: k, ...databaseSP[k] })).filter(x => {
-                if (!q) return true;
-                const blob = [x.no_sp, x.no_cust, x.nama_dealer, x.program, ...(x.items || []).map(i => i.part)].join(" ").toLowerCase();
-                return blob.includes(q);
-            });
+            spIsiPilihanProgram();
+            const data = spDataTerfilter(true);
             const totalPages = Math.max(1, Math.ceil(data.length / rowsPerPage));
             if (currentPageDBSP > totalPages) currentPageDBSP = totalPages;
             const pageStart = (currentPageDBSP - 1) * rowsPerPage;
@@ -5359,8 +5457,87 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
             renderPager("paginationNavDBSP", "paginationInfoDBSP", data.length, currentPageDBSP, "ubahHalamanDBSP");
         }
 
+
+        // ============================================================
+        // FILTER & HAPUS DB SP: per tanggal upload dan/atau Nama Program
+        // (file SP tidak punya kolom tanggal, jadi tanggal = tanggal SP itu di-upload)
+        // ============================================================
+        function spDaftarProgramItem(x) {
+            if (Array.isArray(x.programs) && x.programs.length) return x.programs.map(dbText).filter(Boolean);
+            return dbText(x.program).split(" / ").map(dbText).filter(Boolean);
+        }
+
+        function spIsiPilihanProgram() {
+            const sel = document.getElementById("spFilterProgram");
+            if (!sel) return;
+            const set = new Set();
+            Object.keys(databaseSP).forEach(k => spDaftarProgramItem(databaseSP[k]).forEach(pg => set.add(pg)));
+            const daftar = [...set].sort((a, b) => a.localeCompare(b));
+            const dipilih = sel.value;
+            sel.innerHTML = '<option value="">Semua Program</option>' +
+                daftar.map(pg => `<option value="${dbSafe(pg)}">${dbSafe(pg)}</option>`).join("");
+            sel.value = daftar.includes(dipilih) ? dipilih : "";
+        }
+
+        // pakaiPencarian = ikut kotak cari; tanggal & program selalu ikut filter
+        function spDataTerfilter(pakaiPencarian) {
+            const q = pakaiPencarian ? dbText(document.getElementById("searchDBSP")?.value).toLowerCase() : "";
+            const start = document.getElementById("spFilterStart")?.value || "";
+            const end = document.getElementById("spFilterEnd")?.value || "";
+            const prog = document.getElementById("spFilterProgram")?.value || "";
+            return Object.keys(databaseSP).map(k => ({ _key: k, ...databaseSP[k] })).filter(x => {
+                if (start || end) {
+                    const d = getUploadedDate(x);
+                    if (!d) return false;
+                    if (start && d < start) return false;
+                    if (end && d > end) return false;
+                }
+                if (prog && !spDaftarProgramItem(x).includes(prog)) return false;
+                if (!q) return true;
+                const blob = [x.no_sp, x.no_cust, x.nama_dealer, x.program, ...(x.items || []).map(i => i.part)].join(" ").toLowerCase();
+                return blob.includes(q);
+            });
+        }
+
+        function resetFilterDBSP() {
+            ["spFilterStart", "spFilterEnd", "spFilterProgram", "searchDBSP"].forEach(id => { const el = document.getElementById(id); if (el) el.value = ""; });
+            currentPageDBSP = 1;
+            muatDBSP();
+        }
+
+        function hapusDBSPSesuaiFilter() {
+            if (currentRole !== "admin") { alert("Fitur ini hanya untuk admin."); return; }
+            const start = document.getElementById("spFilterStart")?.value || "";
+            const end = document.getElementById("spFilterEnd")?.value || "";
+            const prog = document.getElementById("spFilterProgram")?.value || "";
+            if (!start && !end && !prog) { alert("Pilih dulu tanggal upload awal/akhir dan/atau Nama Program yang mau dihapus.\n\nUntuk menghapus semuanya, pakai tombol Kosongkan."); return; }
+            if (start && end && start > end) { alert("Tanggal awal tidak boleh lebih besar dari tanggal akhir."); return; }
+
+            // kotak pencarian sengaja tidak ikut: yang dihapus hanya berdasarkan tanggal dan program
+            const target = spDataTerfilter(false);
+            if (!target.length) { alert("Tidak ada SP yang sesuai filter."); return; }
+
+            const totalItem = target.reduce((n, x) => n + (x.items || []).length, 0);
+            const kriteria = [];
+            if (start || end) kriteria.push(`Tgl upload: ${start ? formatDateToDisplay(start) : "awal"} s/d ${end ? formatDateToDisplay(end) : "sekarang"}`);
+            if (prog) kriteria.push(`Program: ${prog}`);
+            const jawab = prompt(
+                `HAPUS ${target.length.toLocaleString("id-ID")} SP (${totalItem.toLocaleString("id-ID")} baris part)\n` +
+                kriteria.join("\n") + `\n\nData yang dihapus tidak bisa dikembalikan.\n\nKetik HAPUS untuk melanjutkan:`
+            );
+            if (jawab === null) return;
+            if (String(jawab).trim().toUpperCase() !== "HAPUS") { alert("Dibatalkan. Kata konfirmasi tidak sesuai."); return; }
+
+            target.forEach(x => { delete databaseSP[x._key]; });
+            persistDatabaseAll();
+            try { updateDatabaseStatusUI(); } catch (e) {}
+            currentPageDBSP = 1;
+            muatDBSP();
+            alert(`${target.length.toLocaleString("id-ID")} SP berhasil dihapus.`);
+        }
+
         function ubahHalamanDBSP(page) {
-            const total = Object.keys(databaseSP).length;
+            const total = spDataTerfilter(true).length;
             const totalPages = Math.max(1, Math.ceil(total / rowsPerPage));
             if (page < 1 || page > totalPages) return;
             currentPageDBSP = page;
@@ -5429,7 +5606,7 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
                     <td>${dbSafe(x.shipment||"-")}</td>
                     <td>${dbSafe(x.kode_ba||"-")}</td>
                     <td>${dbSafe(formatDateToDisplay(x.tgl_gi||getUploadedDate(x)))}</td>
-                    <td><button class="btn btn-sm btn-outline-danger" onclick="deleteDatabaseItem('GISO', ${JSON.stringify(x._key)})"><i class="fas fa-trash"></i></button></td>
+                    <td><button class="btn btn-sm btn-outline-danger" onclick="deleteDatabaseItem('GISO', ${dbSafe(JSON.stringify(x._key))})"><i class="fas fa-trash"></i></button></td>
                 </tr>`).join(""):`<tr><td colspan="5" class="empty-state"><i class="fas fa-database d-block"></i>Tidak ada data GI SO.</td></tr>`;
 
             renderPager("paginationNavDBGISO","paginationInfoDBGISO",data.length,currentPageDBGISO,"ubahHalamanDBGISO");
@@ -5475,9 +5652,9 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
                     <td>${dbSafe(tglGI)}</td>
                     <td>
                         <span class="badge ${badge} me-1">${statusBukti}</span>
-                        ${bukti ? `<button class="btn btn-sm btn-success" onclick="window.open(${JSON.stringify(bukti)},'_blank')"><i class="fas fa-image me-1"></i>Lihat Bukti</button>` : `<span class="text-muted small">Belum tersedia</span>`}
+                        ${bukti ? `<button class="btn btn-sm btn-success" onclick="window.open(${dbSafe(JSON.stringify(bukti))},'_blank')"><i class="fas fa-image me-1"></i>Lihat Bukti</button>` : `<span class="text-muted small">Belum tersedia</span>`}
                     </td>
-                    <td><button class="btn btn-sm btn-outline-danger" onclick="deleteDatabaseItem('GISO', ${JSON.stringify(x._key)})"><i class="fas fa-trash"></i></button></td>
+                    <td><button class="btn btn-sm btn-outline-danger" onclick="deleteDatabaseItem('GISO', ${dbSafe(JSON.stringify(x._key))})"><i class="fas fa-trash"></i></button></td>
                 </tr>`;
             }).join(""):`<tr><td colspan="6" class="empty-state"><i class="fas fa-tasks d-block"></i>Tidak ada data OS GI SO.</td></tr>`;
 
@@ -5558,7 +5735,7 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
                 No:i+1,
                 "Tanggal Cetak Faktur":getTanggalFakturTerbaru(x.no_faktur)||"",
                 "Tgl Kirim":x.tgl_kirim||"",
-                "Shipment":x.shipment||"",
+                "Shipment":String(x.shipment||"").toUpperCase(),
                 "Dokumen":x.jenis_dokumen||"SJ",
                 "Nomor Faktur":x.no_faktur||"",
                 "Customer":x.nama_dealer||"",
@@ -5602,6 +5779,54 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
                 </tr>`).join(""):`<tr><td colspan="7" class="empty-state"><i class="fas fa-check-circle d-block"></i>Tidak ada outstanding ≥ 3 hari.</td></tr>`;
 
             new bootstrap.Modal(document.getElementById("modalAnalisaAI")).show();
+        }
+
+
+        // ============================================================
+        // KONTAK EKSPEDISI: dari kolom "Kontak Ekspedisi" di DB Dealer & Ekspedisi.
+        // Dicari dulu dari dealer yang bersangkutan, lalu dari dealer lain yang memakai ekspedisi yang sama.
+        // ============================================================
+        function cariKontakEkspedisi(namaDealer, namaEkspedisi) {
+            const kontakDari = (it) => dbText(it && it.kontak_ekspedisi);
+            const list = databaseDealerListRaw || [];
+            const kd = dbKey(namaDealer || "");
+            if (kd) {
+                const it = list.find(x => dbKey(x.nama_customer || x.customer || "") === kd && kontakDari(x));
+                if (it) return kontakDari(it);
+            }
+            const ke = dbKey(namaEkspedisi || "");
+            if (ke && ke !== dbKey("BELUM ADA EKSPEDISI")) {
+                const it = list.find(x => dbKey(x.ekspedisi || x.expedisi || "") === ke && kontakDari(x));
+                if (it) return kontakDari(it);
+            }
+            return "";
+        }
+
+        // Kartu "Hubungi Ekspedisi" untuk jendela detail surat jalan (muncul saat nomor SJ diklik).
+        function kontakEkspedisiBlok(namaDealer, namaEkspedisi) {
+            const kontak = cariKontakEkspedisi(namaDealer, namaEkspedisi);
+            if (!kontak) return "";
+            const nomor = String(kontak).split(/[\/,;\n]+/).map(x => x.trim()).filter(x => x.replace(/\D/g, "").length >= 6).slice(0, 3);
+            const namaEksp = dbText(namaEkspedisi);
+            let isi;
+            if (!nomor.length) {
+                isi = `<div class="small">${dbSafe(kontak)}</div>`;
+            } else {
+                isi = nomor.map(n => {
+                    let d = n.replace(/\D/g, "");
+                    if (d.startsWith("0")) d = "62" + d.substring(1);
+                    else if (d.startsWith("8")) d = "62" + d;
+                    return `<div class="d-flex align-items-center flex-wrap gap-2 mb-1">
+                        <span class="fw-bold me-1">${dbSafe(n)}</span>
+                        <a class="btn btn-success btn-sm fw-bold" target="_blank" rel="noopener" href="https://wa.me/${d}"><i class="fab fa-whatsapp me-1"></i> WhatsApp</a>
+                        <a class="btn btn-outline-primary btn-sm fw-bold" href="tel:+${d}"><i class="fas fa-phone me-1"></i> Telepon</a>
+                    </div>`;
+                }).join("");
+            }
+            return `<div class="text-start border rounded-3 p-3 mb-3 bg-light">
+                <h6 class="fw-bold mb-2"><i class="fas fa-headset me-2 text-success"></i>Hubungi Ekspedisi${namaEksp ? ": " + dbSafe(namaEksp) : ""}</h6>
+                ${isi}
+            </div>`;
         }
 
         function getFilteredTransaksi() {
@@ -6160,7 +6385,7 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
                     let newRow = document.createElement('tr');
                     newRow.innerHTML = `
                         <td class="text-success fw-bold">${item.no_faktur}</td>
-                        <td><span class="clickable-shipment" onclick="klikShipmentLaporan('${item.shipment}')">${item.shipment}</span>${item.jenis_dokumen === 'SP' ? ' <span class="badge bg-warning text-dark">SP</span>' : ''}</td>
+                        <td><span class="clickable-shipment" onclick="klikShipmentLaporan('${item.shipment}')">${String(item.shipment || '').toUpperCase()}</span>${item.jenis_dokumen === 'SP' ? ' <span class="badge bg-warning text-dark">SP</span>' : ''}</td>
                         <td>${formatDateToDisplay(item.tgl_kirim)}</td>
                         <td>${item.nama_dealer}</td>
                         <td>${item.expedisi}</td>
@@ -6219,7 +6444,7 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
                     newRow.innerHTML = `
                         <td>${formatDateToDisplay(tglCetakFakturVal)}</td>
                         <td>${formatDateToDisplay(item.tgl_kirim)}</td>
-                        <td><span class="clickable-shipment" onclick="klikShipmentLaporan('${item.shipment}')">${item.shipment}</span>${item.jenis_dokumen === 'SP' ? ' <span class="badge bg-warning text-dark">SP</span>' : ''}</td>
+                        <td><span class="clickable-shipment" onclick="klikShipmentLaporan('${item.shipment}')">${String(item.shipment || '').toUpperCase()}</span>${item.jenis_dokumen === 'SP' ? ' <span class="badge bg-warning text-dark">SP</span>' : ''}</td>
                         <td class="text-success fw-bold">${item.no_faktur}</td>
                         <td>${item.nama_dealer}</td>
                         <td><span class="fw-bold text-danger">${item.expedisi}</span></td>
@@ -6338,7 +6563,7 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
             let item = transaksiData.find(i => i.shipment === shipmentVal);
             if (!item) return;
             
-            document.getElementById('modalFotoTitle').innerText = `Detail Pengiriman & Surat Jalan: ${item.shipment}`;
+            document.getElementById('modalFotoTitle').innerText = `Detail Pengiriman & Surat Jalan: ${String(item.shipment || '').toUpperCase()}`;
             let wrapper = document.getElementById('wrapperModalDetailSJ');
             
             let linkGPSDriver = linkGPSItem(item);
@@ -6410,7 +6635,7 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
                 liveLokasiSection = `<div class="alert alert-success mb-3"><i class="fas fa-check-circle me-1"></i> ${isSPRangka(item) ? 'Surat Pengantar (SP) Rangka' : 'Driver tidak tetap / armada lain'}: keterangan <strong>OK</strong>. Tidak memerlukan Live Lokasi maupun bukti tanda terima.</div>`;
                 if (!item.podFoto) fotoSection = '';
             }
-            wrapper.innerHTML = spSection + liveLokasiSection + fotoSection;
+            wrapper.innerHTML = spSection + liveLokasiSection + kontakEkspedisiBlok(item.nama_dealer, item.expedisi) + fotoSection;
             new bootstrap.Modal(document.getElementById('modalPreviewFoto')).show();
         }
 
@@ -6473,7 +6698,7 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
                 tbody.innerHTML += `
                     <tr>
                         <td>${formatDateToDisplay(item.tgl_kirim)}</td>
-                        <td class="fw-bold">${item.shipment}</td>
+                        <td class="fw-bold">${String(item.shipment || '').toUpperCase()}</td>
                         <td>${item.nama_dealer}</td>
                         <td><span class="badge ${item.status === 'OK' ? 'bg-success' : 'bg-danger'}">${item.status}</span></td>
                         <td>${badgePOD}</td>
@@ -7020,12 +7245,19 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
         document.getElementById('no_customer').addEventListener('input', () => sinkronCustomerSP('no'));
 
         document.getElementById('shipment').addEventListener('input', function() {
+            // huruf kecil otomatis jadi huruf besar (posisi kursor dijaga)
+            const up = this.value.toUpperCase();
+            if (up !== this.value) {
+                const pos = this.selectionStart;
+                this.value = up;
+                try { this.setSelectionRange(pos, pos); } catch (e) {}
+            }
             prosesLookupShipment(this.value.trim());
         });
 
         document.getElementById('formSuratJalan').addEventListener('submit', function(e) {
             e.preventDefault();
-            let shipmentVal = document.getElementById('shipment').value.trim();
+            let shipmentVal = document.getElementById('shipment').value.trim().toUpperCase();
             if (!shipmentVal) return;
 
             const _sudahAda = transaksiData.some(t => dbKey(t.shipment) === dbKey(shipmentVal));
