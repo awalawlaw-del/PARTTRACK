@@ -724,6 +724,20 @@
                 </div>
                 <div id="registerDealerMatch" class="small mb-3" style="display:none;"></div>
                 </div>
+                <div id="registerSalesBlock" style="display:none;">
+                    <div class="dealer-register-note mb-3">
+                        <i class="fas fa-circle-info me-1 text-primary"></i>
+                        Pilih <b>Area</b> lalu pilih <b>nama Salesman</b> Anda. Anda hanya akan melihat dealer yang Anda pegang.
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold small text-secondary">Area <span class="text-danger">*</span></label>
+                        <select id="registerSalesArea" class="form-select form-select-lg fs-6" onchange="isiPilihanSales()"></select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold small text-secondary">Nama Salesman <span class="text-danger">*</span></label>
+                        <select id="registerSalesName" class="form-select form-select-lg fs-6"></select>
+                    </div>
+                </div>
                 <div id="registerNameBlock" class="mb-3 auth-field-icon" style="display:none;">
                     <label class="form-label fw-semibold small text-secondary">Nama Lengkap <span class="text-danger">*</span></label>
                     <i class="fas fa-id-card"></i>
@@ -1074,8 +1088,9 @@
                                         <datalist id="listDealerSP"></datalist>
                                     </div>
                                     <div class="col-md-2">
-                                        <label class="form-label text-muted small">Jumlah Koli</label>
-                                        <input type="text" class="form-control form-control-sm bg-light fw-bold text-success" id="total" readonly>
+                                        <label class="form-label text-muted small">Jumlah Koli <span class="text-secondary">(bisa diedit)</span></label>
+                                        <input type="number" min="1" step="1" inputmode="numeric" class="form-control form-control-sm fw-bold text-success" id="total" autocomplete="off">
+                                        <div id="koliDBHint" class="form-text small" style="display:none;"></div>
                                     </div>
                                     <div class="col-md-3">
                                         <label class="form-label text-muted small">Ekspedisi</label>
@@ -1517,7 +1532,7 @@
                             <div class="row g-3 mb-4">
                                 <div class="col-md-3">
                                     <label class="form-label small fw-semibold">Role</label>
-                                    <select id="newInternalRole" class="form-select">
+                                    <select id="newInternalRole" class="form-select" onchange="ubahRoleUserBaru()">
                                         <option value="admin">Admin Gudang</option>
                                         <option value="driver">Driver</option>
                                         <option value="sparepart">Sparepart</option>
@@ -1527,7 +1542,8 @@
                                 </div>
                                 <div class="col-md-3">
                                     <label class="form-label small fw-semibold">Nama User</label>
-                                    <input id="newInternalName" class="form-control" placeholder="Nama user">
+                                    <input id="newInternalName" class="form-control" placeholder="Nama user" autocomplete="off">
+                                    <datalist id="listSalesAdmin"></datalist>
                                 </div>
                                 <div class="col-md-3">
                                     <label class="form-label small fw-semibold">Username</label>
@@ -1606,6 +1622,8 @@
                                             <th>CustomerNo</th>
                                             <th>EKSPEDISI</th>
                                             <th>KONTAK EKSPEDISI</th>
+                                            <th>SALESMAN</th>
+                                            <th>AREA</th>
                                             <th>Aksi</th>
                                         </tr>
                                     </thead>
@@ -2054,7 +2072,7 @@
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content border-0 shadow-lg">
                 <div class="modal-header bg-info text-dark">
-                    <h5 class="modal-title fw-bold"><i class="fas fa-pen me-2"></i>Edit Ekspedisi Dealer</h5>
+                    <h5 class="modal-title fw-bold"><i class="fas fa-pen me-2"></i>Edit Dealer (Ekspedisi, Salesman & Area)</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body p-4">
@@ -2075,6 +2093,18 @@
                     <div class="mb-1">
                         <label class="form-label small fw-bold mb-1">Kontak Ekspedisi (HP/WA)</label>
                         <input type="text" class="form-control" id="editDealerKontak" placeholder="mis. 0812xxxxxxx (beberapa nomor pisahkan dengan /)" autocomplete="off">
+                    </div>
+                    <div class="row g-2 mt-2">
+                        <div class="col-7">
+                            <label class="form-label small fw-bold mb-1">Salesman</label>
+                            <input type="text" class="form-control" id="editDealerSales" list="daftarSalesEdit" placeholder="Nama salesman" autocomplete="off">
+                            <datalist id="daftarSalesEdit"></datalist>
+                        </div>
+                        <div class="col-5">
+                            <label class="form-label small fw-bold mb-1">Area</label>
+                            <input type="text" class="form-control" id="editDealerArea" list="daftarAreaEdit" placeholder="mis. GOWA" autocomplete="off">
+                            <datalist id="daftarAreaEdit"></datalist>
+                        </div>
                     </div>
                     <div class="small text-muted mt-3"><i class="fas fa-info-circle me-1"></i>Perubahan berlaku untuk pengiriman berikutnya. Data pengiriman yang sudah tercatat tidak ikut berubah. Upload ulang file DB Dealer akan menimpa hasil edit ini.</div>
                 </div>
@@ -2534,7 +2564,7 @@
         pendingKeys.delete(key); tandaiBelumTersimpan();
         lastSynced[key] = raw;
         window.__SB_DATA_DI_SERVER = true;
-        if (key === 'gudang_db_dealer_list_raw') syncDealerPublik(val);
+        if (key === 'gudang_db_dealer_list_raw') { syncDealerPublik(val); syncSalesPublik(val); }
     }
 
     function sbFlush() {
@@ -2562,6 +2592,42 @@
             const { error } = await sb.from('dealer_public').upsert(rows.slice(i, i + 500));
             if (error) { console.error('dealer_public upsert', error); return; }
         }
+    }
+
+    // Daftar Salesman + Area untuk halaman pendaftaran (bisa dibaca sebelum login).
+    // Tabel: sales_public (lihat SQL di petunjuk). Bila tabel belum dibuat, fitur ini diam-diam dilewati.
+    function _ttdSales(rows) { return JSON.stringify((rows || []).map(r => [r.sales_name, r.area]).sort()); }
+    async function syncSalesPublik(list) {
+        try {
+            if (!Array.isArray(list) || typeof dbKey !== 'function') return;
+            const map = new Map();
+            list.forEach(it => {
+                const nm = String((it && it.sales_name) || '').trim().replace(/\s+/g, ' ');
+                if (!nm) return;
+                const ar = String((it && it.sales_area) || '').trim().replace(/\s+/g, ' ');
+                map.set(dbKey(nm) + '|' + dbKey(ar), { sales_name: nm, area: ar });
+            });
+            const rows = [...map.values()];
+            if (_ttdSales(rows) === _ttdSales(window.__SB_SALES_PUBLIK || [])) return;   // tidak ada perubahan
+            const del = await sb.from('sales_public').delete().not('sales_name', 'is', null);
+            if (del.error) { console.warn('sales_public delete', del.error.message); return; }
+            for (let i = 0; i < rows.length; i += 500) {
+                const { error } = await sb.from('sales_public').upsert(rows.slice(i, i + 500));
+                if (error) { console.warn('sales_public upsert', error.message); return; }
+            }
+            window.__SB_SALES_PUBLIK = rows;
+        } catch (e) { console.warn('syncSalesPublik', e); }
+    }
+
+    async function muatSalesPublik() {
+        const rows = [];
+        for (let from = 0; ; from += 1000) {
+            const { data, error } = await sb.from('sales_public').select('sales_name,area').order('area').order('sales_name').range(from, from + 999);
+            if (error) throw error;
+            rows.push(...data);
+            if (data.length < 1000) break;
+        }
+        window.__SB_SALES_PUBLIK = rows;
     }
 
     async function muatDealerPublik() {
@@ -2753,6 +2819,13 @@
             window.__perluSyncDealerPublik = false;
             try { syncDealerPublik(databaseDealerListRaw); } catch (e) {}
         }
+        // Admin: pastikan daftar salesman publik selalu sama dengan DB Dealer
+        if (window.__SB_PROFILE && window.__SB_PROFILE.role === 'admin') {
+            (async () => {
+                try { await muatSalesPublik(); } catch (e) { return; }   // tabel belum ada -> lewati
+                try { await syncSalesPublik(databaseDealerListRaw); } catch (e) {}
+            })();
+        }
     }
 
     (async function boot() {
@@ -2781,6 +2854,7 @@
             } else {
                 hapusSesiLokal();
                 try { await muatDealerPublik(); } catch (e) { console.warn('Daftar dealer publik gagal dimuat', e); }
+                try { await muatSalesPublik(); } catch (e) { console.warn('Daftar salesman publik gagal dimuat (tabel sales_public sudah dibuat?)', e); }
             }
         } catch (e) {
             console.error('Boot gagal', e);
@@ -3052,6 +3126,24 @@
             return '<span class="badge bg-secondary-subtle text-secondary">NONAKTIF</span>';
         }
 
+        // Role Salesman Part: nama user dipilih dari daftar Salesman di DB Dealer (supaya cocok dengan dealer yang dipegang)
+        function ubahRoleUserBaru() {
+            const role = document.getElementById('newInternalRole')?.value;
+            const inp = document.getElementById('newInternalName');
+            const dl = document.getElementById('listSalesAdmin');
+            if (!inp || !dl) return;
+            if (role === 'salespart') {
+                const set = new Set();
+                (databaseDealerListRaw || []).forEach(x => { const n = dbText(x.sales_name); if (n) set.add(n); });
+                dl.innerHTML = [...set].sort((a, b) => a.localeCompare(b)).map(n => `<option value="${dbSafe(n)}"></option>`).join('');
+                inp.setAttribute('list', 'listSalesAdmin');
+                inp.placeholder = 'Pilih nama Salesman (dari DB Dealer)';
+            } else {
+                inp.removeAttribute('list');
+                inp.placeholder = 'Nama user';
+            }
+        }
+
         async function buatUserInternal() {
             if (currentRole !== 'admin') return;
             const role = document.getElementById('newInternalRole')?.value;
@@ -3252,13 +3344,41 @@
             const isDealer = role === 'dealer';
             const dealerBlock = document.getElementById('registerDealerBlock');
             const nameBlock = document.getElementById('registerNameBlock');
+            const salesBlock = document.getElementById('registerSalesBlock');
+            // Salesman Part memilih dari daftar (kalau daftar sudah tersedia); selain itu ketik nama manual seperti biasa
+            const pakaiPilihSales = role === 'salespart' && (window.__SB_SALES_PUBLIK || []).length > 0;
             if (dealerBlock) dealerBlock.style.display = isDealer ? 'block' : 'none';
-            if (nameBlock) nameBlock.style.display = isDealer ? 'none' : 'block';
+            if (salesBlock) salesBlock.style.display = pakaiPilihSales ? 'block' : 'none';
+            if (nameBlock) nameBlock.style.display = (!isDealer && !pakaiPilihSales) ? 'block' : 'none';
+            if (pakaiPilihSales) isiPilihanAreaSales();
+        }
+
+        function isiPilihanAreaSales() {
+            const sel = document.getElementById('registerSalesArea');
+            if (!sel) return;
+            const areas = [...new Set((window.__SB_SALES_PUBLIK || []).map(r => dbText(r.area)))].sort((a, b) => a.localeCompare(b));
+            sel.innerHTML = '<option value="">-- Pilih Area --</option>' + areas.map(a => `<option value="${dbSafe(a)}">${dbSafe(a || '(Tanpa area)')}</option>`).join('');
+            isiPilihanSales();
+        }
+
+        function isiPilihanSales() {
+            const area = document.getElementById('registerSalesArea');
+            const sel = document.getElementById('registerSalesName');
+            if (!area || !sel) return;
+            if (area.selectedIndex <= 0) { sel.innerHTML = '<option value="">-- Pilih Area dulu --</option>'; return; }
+            const names = (window.__SB_SALES_PUBLIK || []).filter(r => dbText(r.area) === area.value).map(r => dbText(r.sales_name)).sort((a, b) => a.localeCompare(b));
+            sel.innerHTML = '<option value="">-- Pilih Nama Salesman --</option>' + names.map(n => `<option value="${dbSafe(n)}">${dbSafe(n)}</option>`).join('');
         }
 
         async function daftarAkunInternalMandiri(role) {
             if (!['driver', 'sparepart', 'salespart', 'warehouse'].includes(role)) return;
-            const name = dbText(document.getElementById('registerFullName')?.value);
+            let name = dbText(document.getElementById('registerFullName')?.value);
+            let salesArea = '';
+            if (role === 'salespart' && (window.__SB_SALES_PUBLIK || []).length > 0) {
+                salesArea = dbText(document.getElementById('registerSalesArea')?.value);
+                name = dbText(document.getElementById('registerSalesName')?.value);
+                if (!salesArea || !name) { alert('Pilih Area dan nama Salesman terlebih dahulu.'); return; }
+            }
             const username = normalisasiUsername(document.getElementById('registerUsername')?.value);
             const password = String(document.getElementById('registerPassword')?.value || '');
             const confirmPw = String(document.getElementById('registerPasswordConfirm')?.value || '');
@@ -3268,11 +3388,12 @@
             if (password.length < 6) { alert('Password minimal 6 karakter.'); return; }
             if (password !== confirmPw) { alert('Konfirmasi password tidak sama.'); return; }
 
-            const hasil = await sbDaftar({ username, password, meta: { role, name } });
+            const hasil = await sbDaftar({ username, password, meta: salesArea ? { role, name, sales_area: salesArea } : { role, name } });
             if (!hasil.ok) { alert(hasil.msg); return; }
 
-            alert(`Pendaftaran akun berhasil dikirim.\n\nNama: ${name}\nRole: ${roleInternalText(role)}\nStatus: MENUNGGU APPROVAL ADMIN GUDANG`);
+            alert(`Pendaftaran akun berhasil dikirim.\n\nNama: ${name}${salesArea ? '\nArea: ' + salesArea : ''}\nRole: ${roleInternalText(role)}\nStatus: MENUNGGU APPROVAL ADMIN GUDANG`);
             ['registerFullName', 'registerUsername', 'registerPassword', 'registerPasswordConfirm'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+            const _sa = document.getElementById('registerSalesArea'); if (_sa) { _sa.selectedIndex = 0; isiPilihanSales(); }
             tampilkanAuthPanel('login');
         }
 
@@ -3515,7 +3636,8 @@
                     list.push({id:`summary_${today}_wh`, type:'info', title:'Tidak Ada SJ Tertahan', text:'Tidak ada surat jalan yang 2 hari atau lebih masih dalam pengantaran.', detail:'Pemberitahuan muncul otomatis jika ada SJ yang tertahan.', time:today, unread:true});
                 }
             } else if (currentRole === 'salespart') {
-                (transaksiData || []).filter(it => sekarang - tsBaruItem(it) <= JENDELA_MS).forEach(it => {
+                const _fsNotif = buatFilterSalesman();
+                (transaksiData || []).filter(it => (!_fsNotif || _fsNotif(it)) && sekarang - tsBaruItem(it) <= JENDELA_MS).forEach(it => {
                     const shipment = dbText(it.shipment || it.no_sj || '-');
                     list.push({
                         id: `sjbaru_${shipment}`, type: 'sjbaru', title: 'Surat Jalan Keluar Baru',
@@ -4781,6 +4903,13 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
                         "no wa ekspedisi", "kontak expedisi", "no hp expedisi", "telp expedisi", "kontak"
                     ])) || ambilKontakEkspedisi(row);
 
+                    const salesName = dbText(getRowValue(row, [
+                        "salesman", "nama salesman", "nama sales", "sales name", "sales man", "salesman part"
+                    ]));
+                    const salesArea = dbText(getRowValue(row, [
+                        "area sales", "area salesman", "area", "wilayah"
+                    ]));
+
                     if (!customer && !customerNo) {
                         skipped++;
                         return;
@@ -4792,6 +4921,8 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
                         customer_no: customerNo,
                         ekspedisi: ekspedisi,
                         kontak_ekspedisi: kontakEkspedisi,
+                        sales_name: salesName,
+                        sales_area: salesArea,
                         _uploadedAt: now,
                         _uploadOrder: rowIndex
                     };
@@ -4802,6 +4933,10 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
                     );
 
                     if (oldIndex >= 0) {
+                        // file tanpa kolom Salesman/Area tidak boleh menghapus data salesman yang sudah diisi
+                        const _old = databaseDealerListRaw[oldIndex];
+                        if (!item.sales_name && _old.sales_name) item.sales_name = _old.sales_name;
+                        if (!item.sales_area && _old.sales_area) item.sales_area = _old.sales_area;
                         databaseDealerListRaw[oldIndex] = item;
                         replaced++;
                     } else {
@@ -5352,6 +5487,12 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
             document.getElementById("editDealerNo").value = dbText(x.customer_no || x.customerno);
             document.getElementById("editDealerEkspedisi").value = dbText(x.ekspedisi || x.expedisi);
             document.getElementById("editDealerKontak").value = ambilKontakEkspedisi(x);
+            document.getElementById("editDealerSales").value = dbText(x.sales_name);
+            document.getElementById("editDealerArea").value = dbText(x.sales_area);
+            const _sSet = new Set(), _aSet = new Set();
+            databaseDealerListRaw.forEach(it => { const sn = dbText(it.sales_name), ar = dbText(it.sales_area); if (sn) _sSet.add(sn); if (ar) _aSet.add(ar); });
+            document.getElementById("daftarSalesEdit").innerHTML = [..._sSet].sort((a, b) => a.localeCompare(b)).map(e => `<option value="${dbSafe(e)}"></option>`).join("");
+            document.getElementById("daftarAreaEdit").innerHTML = [..._aSet].sort((a, b) => a.localeCompare(b)).map(e => `<option value="${dbSafe(e)}"></option>`).join("");
 
             // saran nama ekspedisi dari data yang sudah ada, supaya penulisan konsisten
             const set = new Set();
@@ -5372,6 +5513,8 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
 
             x.ekspedisi = eksp;
             x.kontak_ekspedisi = kontak;
+            x.sales_name = dbText(document.getElementById("editDealerSales").value);
+            x.sales_area = dbText(document.getElementById("editDealerArea").value);
             // kolom asli dari file Excel ikut diselaraskan agar tidak membingungkan bila terbaca di tempat lain
             if (x.expedisi !== undefined) x.expedisi = eksp;
 
@@ -5380,7 +5523,7 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
             try { updateDatabaseStatusUI(); } catch (e) {}
             try { muatDBDealer(); } catch (e) {}
             bootstrap.Modal.getOrCreateInstance(document.getElementById("modalEditDealer")).hide();
-            alert(`Ekspedisi ${dbText(x.nama_customer || x.customer)} berhasil diubah menjadi ${eksp}.`);
+            alert(`Data ${dbText(x.nama_customer || x.customer)} berhasil disimpan.\nEkspedisi: ${eksp}${x.sales_name ? `\nSalesman: ${x.sales_name}${x.sales_area ? ' (' + x.sales_area + ')' : ''}` : ''}`);
         }
 
         function muatDBDealer() {
@@ -5408,9 +5551,11 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
                     <td>${dbSafe(x.customer_no||x.customerno||"-")}</td>
                     <td><span class="badge bg-info text-dark">${dbSafe(x.ekspedisi||x.expedisi||"-")}</span></td>
                     <td>${dbSafe(ambilKontakEkspedisi(x)||"-")}</td>
-                    <td><button class="btn btn-sm btn-outline-primary me-1" title="Edit ekspedisi & kontak" onclick="bukaEditDealer(${dbSafe(JSON.stringify(key))})"><i class="fas fa-pen"></i></button><button class="btn btn-sm btn-outline-danger" onclick="deleteDatabaseItem('Dealer', ${dbSafe(JSON.stringify(key))})"><i class="fas fa-trash"></i></button></td>
+                    <td>${dbSafe(x.sales_name||"-")}</td>
+                    <td>${x.sales_area ? `<span class="badge bg-secondary">${dbSafe(x.sales_area)}</span>` : "-"}</td>
+                    <td><button class="btn btn-sm btn-outline-primary me-1" title="Edit ekspedisi, salesman & area" onclick="bukaEditDealer(${dbSafe(JSON.stringify(key))})"><i class="fas fa-pen"></i></button><button class="btn btn-sm btn-outline-danger" onclick="deleteDatabaseItem('Dealer', ${dbSafe(JSON.stringify(key))})"><i class="fas fa-trash"></i></button></td>
                 </tr>`;
-            }).join(""):`<tr><td colspan="6" class="empty-state"><i class="fas fa-store d-block"></i>Tidak ada data Dealer.</td></tr>`;
+            }).join(""):`<tr><td colspan="8" class="empty-state"><i class="fas fa-store d-block"></i>Tidak ada data Dealer.</td></tr>`;
 
             renderPager("paginationNavDBDealer","paginationInfoDBDealer",data.length,currentPageDBDealer,"ubahHalamanDBDealer");
         }
@@ -5707,7 +5852,10 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
                 No:i+1,
                 "Nama Customer":x.nama_customer||x.customer||"",
                 CustomerNo:x.customer_no||x.customerno||"",
-                EKSPEDISI:x.ekspedisi||x.expedisi||""
+                EKSPEDISI:x.ekspedisi||x.expedisi||"",
+                "Kontak Ekspedisi":ambilKontakEkspedisi(x)||"",
+                Salesman:x.sales_name||"",
+                Area:x.sales_area||""
             }));
             const ws=XLSX.utils.json_to_sheet(data), wb=XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb,ws,"DB Dealer");
@@ -5856,10 +6004,44 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
             </div>`;
         }
 
+        // Salesman Part: hanya melihat dealer di AREA miliknya.
+        //  - Dealer yang tidak punya Salesman & Area (atau tidak ada di DB Dealer, mis. IBH760) tampil untuk SEMUA salesman.
+        //  - Area salesman diambil dari baris DB Dealer yang Salesman-nya = nama akun (plus sales_area profil bila ada).
+        //  - Selama DB Dealer belum berisi data Salesman/Area sama sekali, tidak ada pembatasan (perilaku lama).
+        function buatFilterSalesman() {
+            const list = databaseDealerListRaw || [];
+            if (!list.some(x => dbText(x.sales_name) || dbText(x.sales_area))) return null;
+            const normNo = v => dbKey(v).replace(/^0+(?=\d)/, '');
+            const saya = dbKey((window.__SB_PROFILE && window.__SB_PROFILE.name) || '');
+            const areaSaya = new Set();
+            const areaProfil = dbKey((window.__SB_PROFILE && window.__SB_PROFILE.sales_area) || '');
+            if (areaProfil) areaSaya.add(areaProfil);
+            const byNo = new Map(), byNama = new Map();
+            list.forEach(x => {
+                const info = { sales: dbKey(x.sales_name), area: dbKey(x.sales_area) };
+                if (info.sales && info.sales === saya && info.area) areaSaya.add(info.area);
+                const no = normNo(x.customer_no || x.customerno || '');
+                const nm = dbKey(x.nama_customer || x.customer || '');
+                if (no) byNo.set(no, info);
+                if (nm) byNama.set(nm, info);
+            });
+            return it => {
+                const info = byNo.get(normNo(it.no_customer || '')) || byNama.get(dbKey(it.nama_dealer || ''));
+                if (!info) return true;                       // dealer tidak ada di master -> semua salesman
+                if (!info.sales && !info.area) return true;   // belum dipetakan -> semua salesman
+                if (info.area) return areaSaya.has(info.area);
+                return info.sales === saya;                   // ada nama sales tapi tanpa area -> hanya sales itu
+            };
+        }
+
         function getFilteredTransaksi() {
             let data = transaksiData;
             if (currentRole === 'dealer') {
                 data = data.filter(i => i.nama_dealer.toLowerCase().includes(currentDealer.toLowerCase()));
+            }
+            if (currentRole === 'salespart') {
+                const _fs = buatFilterSalesman();
+                if (_fs) data = data.filter(_fs);
             }
 
             const _tglA = (document.getElementById('exportStart') || {}).value || '';
@@ -7039,6 +7221,20 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
             }
         }
 
+        // Info jumlah koli di DB SAP + sisa yang belum dibawa (bila Jumlah Koli diedit lebih kecil)
+        function tampilHintKoliDB() {
+            const h = document.getElementById('koliDBHint');
+            if (!h) return;
+            const db = parseInt(window._koliDB) || 0;
+            if (db <= 0) { h.style.display = 'none'; h.innerHTML = ''; return; }
+            const isi = parseInt((document.getElementById('total') || {}).value);
+            let teks = `Di DB SAP: <b>${db}</b> koli.`;
+            if (isi >= 1 && isi < db) teks += ` <span class="text-danger fw-semibold">Sisa ${db - isi} koli tidak ikut dikirim.</span>`;
+            else if (isi > db) teks += ` <span class="text-danger fw-semibold">Melebihi DB!</span>`;
+            h.style.display = 'block'; h.innerHTML = teks;
+        }
+        (function () { const t = document.getElementById('total'); if (t) t.addEventListener('input', tampilHintKoliDB); })();
+
         // Field SP: readonly kalau data diambil otomatis dari DB SP, bisa diketik kalau SP manual.
         function setFieldSPEditable(editable) {
             ['no_faktur', 'jenis_kemasan', 'no_customer', 'nama_dealer', 'expedisi', 'isi_barang'].forEach(id => {
@@ -7053,13 +7249,17 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
 
         function terapkanModeDokumen() {
             const isSP = getJenisDokumen() === 'SP';
-            ['no_faktur', 'jenis_kemasan', 'no_customer', 'nama_dealer', 'expedisi', 'total', 'isi_barang'].forEach(id => {
+            ['no_faktur', 'jenis_kemasan', 'no_customer', 'nama_dealer', 'expedisi', 'isi_barang'].forEach(id => {
                 const el = document.getElementById(id);
                 if (!el) return;
                 el.readOnly = !isSP;
                 el.classList.toggle('bg-light', !isSP);
                 el.value = '';
             });
+            // Jumlah Koli selalu bisa diedit (SJ maupun SP)
+            const _tot = document.getElementById('total');
+            if (_tot) { _tot.readOnly = false; _tot.classList.remove('bg-light'); _tot.value = ''; }
+            window._koliDB = null; tampilHintKoliDB();
             const namaEl = document.getElementById('nama_dealer');
             const noCustEl = document.getElementById('no_customer');
             if (isSP) { namaEl.setAttribute('list', 'listDealerSP'); noCustEl.setAttribute('list', 'listCustNoSP'); }
@@ -7220,6 +7420,7 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
                 const masterSJ = cariMasterDealer('', dataSJ.nama_customer || '');
                 document.getElementById('no_customer').value = masterSJ ? getDealerMasterFields(masterSJ).customerNo : "";
                 document.getElementById('total').value = dataSJ.jumlah_koli || 0;
+                window._koliDB = parseInt(dataSJ.jumlah_koli) || 0; tampilHintKoliDB();
                 document.getElementById('isi_barang').value = dataSJ.isi_barang || "";
 
                 let tglFakturDB = getTanggalFakturTerbaru(dataSJ.billing) || dataSJ.tgl_faktur || "";
@@ -7261,6 +7462,7 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
                 document.getElementById('no_customer').value = "";
                 document.getElementById('expedisi').value = "REGULER";
                 document.getElementById('total').value = 1;
+                window._koliDB = null; tampilHintKoliDB();
                 document.getElementById('isi_barang').value = "";
                 document.getElementById('tgl_faktur').value = "-";
                 document.getElementById('lead_time_preview').value = "0 Hari";
@@ -7311,7 +7513,11 @@ if (_sudahAda) {
             let jenisKemasanVal = document.getElementById('jenis_kemasan').value || "Koli";
             let namaDealerVal = document.getElementById('nama_dealer').value || "GENERAL";
             let expedisiVal = document.getElementById('expedisi').value || "REGULER";
-            let totalKoliVal = parseInt(document.getElementById('total').value) || 1;
+            const _koliInput = document.getElementById('total');
+            let totalKoliVal = parseInt(_koliInput.value);
+            if (!(totalKoliVal >= 1)) { alert('Isi Jumlah Koli minimal 1!'); _koliInput.focus(); return; }
+            const _koliDB = parseInt(window._koliDB) || 0;
+            if (_koliDB && totalKoliVal > _koliDB && !confirm(`Jumlah koli (${totalKoliVal}) lebih besar dari DB SAP (${_koliDB}). Tetap lanjutkan?`)) { _koliInput.focus(); return; }
 
             const isSP = getJenisDokumen() === 'SP';
             // Tidak perlu foto (langsung OK): SP Rangka, atau driver tidak tetap (ABDI, JNE, dll)
@@ -7357,6 +7563,7 @@ if (_sudahAda) {
                 no_customer: document.getElementById('no_customer').value.trim(),
                 expedisi: expedisiVal,
                 total: totalKoliVal,
+                total_db: _koliDB || null,
                 leadTimeVal: leadTimeVal,
                 status: tanpaFoto ? "OK" : "BELUM KEMBALI",
                 podFoto: "",
@@ -7384,6 +7591,7 @@ if (_sudahAda) {
             window._spRuleAuto = false;
             document.getElementById('expedisi').value = "";
             document.getElementById('total').value = "";
+            window._koliDB = null; tampilHintKoliDB();
             document.getElementById('isi_barang').value = "";
             document.getElementById('tgl_faktur').value = "";
             document.getElementById('lead_time_preview').value = "";
