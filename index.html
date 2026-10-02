@@ -727,16 +727,13 @@
                 <div id="registerSalesBlock" style="display:none;">
                     <div class="dealer-register-note mb-3">
                         <i class="fas fa-circle-info me-1 text-primary"></i>
-                        Pilih <b>Area</b> lalu pilih <b>nama Salesman</b> Anda. Anda hanya akan melihat dealer yang Anda pegang.
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold small text-secondary">Area <span class="text-danger">*</span></label>
-                        <select id="registerSalesArea" class="form-select form-select-lg fs-6" onchange="isiPilihanSales()"></select>
+                        Pilih <b>nama Salesman</b> Anda. Area akan terisi otomatis dan Anda hanya akan melihat dealer di area tersebut.
                     </div>
                     <div class="mb-3">
                         <label class="form-label fw-semibold small text-secondary">Nama Salesman <span class="text-danger">*</span></label>
-                        <select id="registerSalesName" class="form-select form-select-lg fs-6"></select>
+                        <select id="registerSalesName" class="form-select form-select-lg fs-6" onchange="tampilAreaSales()"></select>
                     </div>
+                    <div id="registerSalesAreaInfo" class="small mb-3" style="display:none;"></div>
                 </div>
                 <div id="registerNameBlock" class="mb-3 auth-field-icon" style="display:none;">
                     <label class="form-label fw-semibold small text-secondary">Nama Lengkap <span class="text-danger">*</span></label>
@@ -3350,24 +3347,34 @@
             if (dealerBlock) dealerBlock.style.display = isDealer ? 'block' : 'none';
             if (salesBlock) salesBlock.style.display = pakaiPilihSales ? 'block' : 'none';
             if (nameBlock) nameBlock.style.display = (!isDealer && !pakaiPilihSales) ? 'block' : 'none';
-            if (pakaiPilihSales) isiPilihanAreaSales();
+            if (pakaiPilihSales) isiPilihanNamaSales();
         }
 
-        function isiPilihanAreaSales() {
-            const sel = document.getElementById('registerSalesArea');
-            if (!sel) return;
-            const areas = [...new Set((window.__SB_SALES_PUBLIK || []).map(r => dbText(r.area)))].sort((a, b) => a.localeCompare(b));
-            sel.innerHTML = '<option value="">-- Pilih Area --</option>' + areas.map(a => `<option value="${dbSafe(a)}">${dbSafe(a || '(Tanpa area)')}</option>`).join('');
-            isiPilihanSales();
-        }
-
-        function isiPilihanSales() {
-            const area = document.getElementById('registerSalesArea');
+        function isiPilihanNamaSales() {
             const sel = document.getElementById('registerSalesName');
-            if (!area || !sel) return;
-            if (area.selectedIndex <= 0) { sel.innerHTML = '<option value="">-- Pilih Area dulu --</option>'; return; }
-            const names = (window.__SB_SALES_PUBLIK || []).filter(r => dbText(r.area) === area.value).map(r => dbText(r.sales_name)).sort((a, b) => a.localeCompare(b));
+            if (!sel) return;
+            const names = [...new Set((window.__SB_SALES_PUBLIK || []).map(r => dbText(r.sales_name)))].filter(Boolean).sort((a, b) => a.localeCompare(b));
             sel.innerHTML = '<option value="">-- Pilih Nama Salesman --</option>' + names.map(n => `<option value="${dbSafe(n)}">${dbSafe(n)}</option>`).join('');
+            tampilAreaSales();
+        }
+
+        // Area salesman (bisa lebih dari satu) otomatis dari DB Dealer
+        function areaDariSales(nama) {
+            const k = dbKey(nama);
+            return [...new Set((window.__SB_SALES_PUBLIK || []).filter(r => dbKey(r.sales_name) === k).map(r => dbText(r.area)).filter(Boolean))];
+        }
+
+        function tampilAreaSales() {
+            const box = document.getElementById('registerSalesAreaInfo');
+            const nama = document.getElementById('registerSalesName')?.value;
+            if (!box) return;
+            if (!nama) { box.style.display = 'none'; box.innerHTML = ''; return; }
+            const areas = areaDariSales(nama);
+            box.style.display = 'block';
+            box.className = 'small mb-3 alert ' + (areas.length ? 'alert-success' : 'alert-warning') + ' py-2 px-3';
+            box.innerHTML = areas.length
+                ? `<i class="fas fa-location-dot me-1"></i><b>Area:</b> ${areas.map(a => dbSafe(a)).join(', ')}`
+                : '<i class="fas fa-triangle-exclamation me-1"></i>Area belum terdata untuk salesman ini. Hubungi Admin Gudang.';
         }
 
         async function daftarAkunInternalMandiri(role) {
@@ -3375,9 +3382,9 @@
             let name = dbText(document.getElementById('registerFullName')?.value);
             let salesArea = '';
             if (role === 'salespart' && (window.__SB_SALES_PUBLIK || []).length > 0) {
-                salesArea = dbText(document.getElementById('registerSalesArea')?.value);
                 name = dbText(document.getElementById('registerSalesName')?.value);
-                if (!salesArea || !name) { alert('Pilih Area dan nama Salesman terlebih dahulu.'); return; }
+                if (!name) { alert('Pilih nama Salesman terlebih dahulu.'); return; }
+                salesArea = areaDariSales(name).join(', ');
             }
             const username = normalisasiUsername(document.getElementById('registerUsername')?.value);
             const password = String(document.getElementById('registerPassword')?.value || '');
@@ -3393,7 +3400,7 @@
 
             alert(`Pendaftaran akun berhasil dikirim.\n\nNama: ${name}${salesArea ? '\nArea: ' + salesArea : ''}\nRole: ${roleInternalText(role)}\nStatus: MENUNGGU APPROVAL ADMIN GUDANG`);
             ['registerFullName', 'registerUsername', 'registerPassword', 'registerPasswordConfirm'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
-            const _sa = document.getElementById('registerSalesArea'); if (_sa) { _sa.selectedIndex = 0; isiPilihanSales(); }
+            const _sn = document.getElementById('registerSalesName'); if (_sn) { _sn.selectedIndex = 0; tampilAreaSales(); }
             tampilkanAuthPanel('login');
         }
 
