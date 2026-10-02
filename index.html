@@ -799,7 +799,7 @@
                     </button>
                 </li>
                 <!-- MENU BARU: STATUS PESANAN -->
-                <li class="nav-item role-menu admin-dealer" role="presentation">
+                <li class="nav-item role-menu admin-dealer sales-status" role="presentation">
                     <button class="nav-link w-100 text-start" data-bs-toggle="pill" data-bs-target="#menu-status-pesanan" type="button" role="tab" onclick="muatDataStatusPesanan()">
                         <i class="fas fa-clipboard-check"></i><span>Status Pesanan</span>
                     </button>
@@ -4048,6 +4048,7 @@
                 const label = currentRole === 'sparepart' ? 'Sparepart' : 'Salesman Part';
                 document.getElementById('userRoleBadge').innerText = `${label} • ${currentUsername || 'User'}`;
                 document.querySelectorAll('.report-access').forEach(el => el.style.display = 'block');
+                if (currentRole === 'salespart') document.querySelectorAll('.sales-status').forEach(el => el.style.display = 'block');
                 aktifkanTabAwal('#menu-laporan');
                 renderLaporanUlang();
             }
@@ -6132,6 +6133,62 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
         let _spSearchTimer = null;
         let _spTrx = null;
 
+        // ---- Status Pesanan untuk Salesman Part ----
+        // Hanya dealer BERNAMA SALESMAN (di DB Dealer) yang areanya sama dengan area salesman.
+        // Dealer tanpa nama Salesman TIDAK ditampilkan.
+        function spCustomerSales() {
+            const list = databaseDealerListRaw || [];
+            if (!list.some(x => dbText(x.sales_name) || dbText(x.sales_area))) {
+                return { nos: [], pesan: 'Data Salesman & Area belum diisi di DB Dealer. Hubungi Admin Gudang.' };
+            }
+            const saya = dbKey((window.__SB_PROFILE && window.__SB_PROFILE.name) || '');
+            const areaSaya = new Set();
+            const areaProfil = dbKey((window.__SB_PROFILE && window.__SB_PROFILE.sales_area) || '');
+            if (areaProfil) areaProfil.split(',').forEach(a => { if (a.trim()) areaSaya.add(a.trim()); });
+            list.forEach(x => { if (dbKey(x.sales_name) === saya && dbKey(x.sales_area)) areaSaya.add(dbKey(x.sales_area)); });
+            const set = new Set();
+            list.forEach(x => {
+                const sales = dbKey(x.sales_name), area = dbKey(x.sales_area);
+                if (!sales) return;                                   // tanpa nama salesman -> tidak ditampilkan
+                const milikSaya = area ? areaSaya.has(area) : sales === saya;
+                if (!milikSaya) return;
+                const raw = dbText(x.customer_no || x.customerno || '');
+                if (!raw) return;
+                set.add(raw);
+                const tanpaNol = raw.replace(/^0+(?=\d)/, '');
+                set.add(tanpaNol);
+                if (/^\d+$/.test(tanpaNol) && tanpaNol.length < 10) set.add(tanpaNol.padStart(10, '0'));
+            });
+            if (!set.size) return { nos: [], pesan: 'Belum ada dealer di area Anda. Hubungi Admin Gudang bila seharusnya ada.' };
+            return { nos: [...set] };
+        }
+
+        let _spSalesCache = { key: '', waktu: 0, rows: [] };
+        async function spAmbilSemuaSales(term, fTgl) {
+            const info = spCustomerSales();
+            if (info.pesan) return { rows: [], pesan: info.pesan };
+            const key = JSON.stringify([term || '', fTgl && fTgl.vals ? fTgl.vals : null, info.nos.length]);
+            if (_spSalesCache.key === key && Date.now() - _spSalesCache.waktu < 60000) return { rows: _spSalesCache.rows };
+            const hasil = [];
+            try {
+                for (let i = 0; i < info.nos.length; i += 100) {
+                    const chunk = info.nos.slice(i, i + 100);
+                    for (let from = 0; ; from += 1000) {
+                        let q = sb.from('status_pesanan').select('*').in('nomor_customer', chunk);
+                        if (term) q = q.ilike('cari', spPolaLike(term));
+                        if (fTgl && fTgl.vals) q = q.in('shipment_date', fTgl.vals);
+                        const { data, error } = await q.order('id', { ascending: true }).range(from, from + 999);
+                        if (error) return { rows: [], error };
+                        (data || []).forEach(r => hasil.push(r));
+                        if (!data || data.length < 1000) break;
+                    }
+                }
+            } catch (e) { return { rows: [], error: e }; }
+            hasil.sort((a, b) => (a.id || 0) - (b.id || 0));
+            _spSalesCache = { key, waktu: Date.now(), rows: hasil };
+            return { rows: hasil };
+        }
+
         function cariStatusPesananDebounce() {
             clearTimeout(_spSearchTimer);
             _spSearchTimer = setTimeout(function () {
@@ -6428,7 +6485,12 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
             if (fTgl.vals) q = q.in('shipment_date', fTgl.vals);
             let res;
             try {
-                res = await q.order('id', { ascending: true }).range(from, from + rowsPerPage - 1);
+                if (currentRole === 'salespart') {
+                    const h = await spAmbilSemuaSales(term, fTgl);
+                    res = h.error ? { error: h.error } : { data: h.rows.slice(from, from + rowsPerPage), count: h.rows.length, pesan: h.pesan };
+                } else {
+                    res = await q.order('id', { ascending: true }).range(from, from + rowsPerPage - 1);
+                }
             } catch (e) {
                 res = { error: e };
             }
@@ -6443,7 +6505,7 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
 
             const total = res.count || 0;
             _spServer.total = total;
-            if (!term && !fTgl.vals) {
+            if (!term && !fTgl.vals && currentRole !== 'salespart') {
                 _spServer.totalAll = total;
                 try { updateDatabaseStatusUI(); } catch (e) {}
             }
@@ -6455,7 +6517,7 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
 
             const data = res.data || [];
             if (data.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="11" class="empty-state"><i class="fas fa-clipboard-check d-block"></i>Belum ada data Status Pesanan yang di-upload atau sesuai pencarian.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="11" class="empty-state"><i class="fas fa-clipboard-check d-block"></i>${dbSafe(res.pesan || 'Belum ada data Status Pesanan yang di-upload atau sesuai pencarian.')}</td></tr>`;
             } else {
                 tbody.innerHTML = data.map((row) => {
                     const statusText = getStatusPesananText(row);
@@ -6527,6 +6589,12 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
                 if (fTglX.error) { alert(fTglX.error); return; }
                 const semua = [];
                 const LANGKAH = 1000;
+                if (currentRole === 'salespart') {
+                    const h = await spAmbilSemuaSales('', fTglX);
+                    if (h.pesan) { alert(h.pesan); return; }
+                    if (h.error) throw h.error;
+                    h.rows.forEach(r => semua.push(r));
+                } else {
                 for (let from = 0; ; from += LANGKAH) {
                     let qx = sb.from('status_pesanan').select('*');
                     if (fTglX.vals) qx = qx.in('shipment_date', fTglX.vals);
@@ -6534,6 +6602,7 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
                     if (error) throw error;
                     for (let i = 0; i < data.length; i++) semua.push(data[i]);
                     if (data.length < LANGKAH) break;
+                }
                 }
                 if (semua.length === 0) {
                     alert("Tidak ada data Status Pesanan untuk diekspor!");
