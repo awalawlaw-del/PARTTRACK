@@ -2734,8 +2734,11 @@
     }
 
     /* ---------- 6) boot mode demo (dipanggil dari boot() di bawah) ---------- */
-    window.demoBoot = async function () {
-        var role = qs.get('role');
+window.demoBoot = async function () {
+    if (document.readyState === 'loading') {
+        await new Promise(function (r) { document.addEventListener('DOMContentLoaded', r); });
+    }
+    var role = qs.get('role');
         if (!PROFIL_ROLE[role]) { sembunyiSplash(); tampilPemilih(); return; }
         var p = window.__DEMO_DB.profiles.filter(function (x) { return x.id === PROFIL_ROLE[role]; })[0];
         window.__SB_PROFILE = p;
