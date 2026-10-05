@@ -2297,6 +2297,461 @@
          ============================================================ -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>
+/* ============================================================
+   MODE DEMO (preview tanpa login) - dibuka lewat  ?demo=1
+   - Tidak ada koneksi ke Supabase sama sekali (client diganti "database" palsu di memori).
+   - Semua data adalah DATA CONTOH yang dibuat otomatis; perubahan hilang saat halaman di-refresh.
+   - localStorage asli perangkat tidak disentuh (diganti penyimpanan memori).
+   Link langsung per role:  ?demo=1&role=admin | warehouse | driver | dealer | sparepart | salespart
+   ============================================================ */
+(function () {
+    var qs = new URLSearchParams(location.search);
+    var on = qs.has('demo') && !/^(0|false|no)$/i.test(qs.get('demo') || '');
+    window.DEMO_MODE = on;
+    if (!on) return;
+
+    document.title = 'PARTTRACK (DEMO)';
+
+    /* ---------- 1) localStorage -> memori (aman: tidak menimpa sesi/data asli di browser) ---------- */
+    var mem = new Map();
+    var oS = Storage.prototype.setItem, oG = Storage.prototype.getItem, oR = Storage.prototype.removeItem;
+    var oC = Storage.prototype.clear, oK = Storage.prototype.key;
+    var lenDesc = Object.getOwnPropertyDescriptor(Storage.prototype, 'length');
+    Storage.prototype.setItem = function (k, v) { if (this === localStorage) mem.set(String(k), String(v)); else oS.call(this, k, v); };
+    Storage.prototype.getItem = function (k) { if (this === localStorage) return mem.has(String(k)) ? mem.get(String(k)) : null; return oG.call(this, k); };
+    Storage.prototype.removeItem = function (k) { if (this === localStorage) mem.delete(String(k)); else oR.call(this, k); };
+    Storage.prototype.clear = function () { if (this === localStorage) mem.clear(); else oC.call(this); };
+    Storage.prototype.key = function (i) { if (this === localStorage) { var a = Array.from(mem.keys()); return i < a.length ? a[i] : null; } return oK.call(this, i); };
+    if (lenDesc && lenDesc.get) {
+        Object.defineProperty(Storage.prototype, 'length', { configurable: true, get: function () { return this === localStorage ? mem.size : lenDesc.get.call(this); } });
+    }
+
+    /* ---------- 2) data contoh ---------- */
+    function buildData() {
+        var seed = 20261005;
+        function rnd() { seed = (seed * 1664525 + 1013904223) % 4294967296; return seed / 4294967296; }
+        function ri(a, b) { return a + Math.floor(rnd() * (b - a + 1)); }
+        function pick(a) { return a[Math.floor(rnd() * a.length)]; }
+        function pad(n, l) { return String(n).padStart(l || 2, '0'); }
+        var base = new Date(); base.setHours(12, 0, 0, 0);
+        function dt(off) { var d = new Date(base.getTime()); d.setDate(d.getDate() + off); return d; }
+        function iso(off) { var d = dt(off); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+        function dmy(off) { var d = dt(off); return pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + '/' + d.getFullYear(); }
+        var nowMs = Date.now();
+
+        function foto(label, warna) {
+            var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="480" height="640" viewBox="0 0 480 640">' +
+                '<rect width="480" height="640" fill="' + warna + '"/>' +
+                '<rect x="50" y="60" width="380" height="520" rx="12" fill="#fff" stroke="#cbd5e1" stroke-width="3"/>' +
+                '<text x="240" y="125" text-anchor="middle" font-family="Arial,sans-serif" font-size="28" font-weight="700" fill="#334155">TANDA TERIMA</text>' +
+                '<text x="240" y="158" text-anchor="middle" font-family="Arial,sans-serif" font-size="16" fill="#94a3b8">(foto contoh - mode demo)</text>' +
+                '<line x1="90" y1="200" x2="390" y2="200" stroke="#e2e8f0" stroke-width="2"/>' +
+                '<line x1="90" y1="250" x2="390" y2="250" stroke="#e2e8f0" stroke-width="2"/>' +
+                '<line x1="90" y1="300" x2="390" y2="300" stroke="#e2e8f0" stroke-width="2"/>' +
+                '<line x1="90" y1="350" x2="340" y2="350" stroke="#e2e8f0" stroke-width="2"/>' +
+                '<text x="240" y="440" text-anchor="middle" font-family="Arial,sans-serif" font-size="22" font-weight="700" fill="#475569">' + label + '</text>' +
+                '<rect x="280" y="470" width="110" height="60" rx="6" fill="none" stroke="#2563eb" stroke-width="3" transform="rotate(-8 335 500)"/>' +
+                '<text x="335" y="508" text-anchor="middle" font-family="Arial,sans-serif" font-size="20" font-weight="700" fill="#2563eb" transform="rotate(-8 335 500)">DITERIMA</text>' +
+                '</svg>';
+            return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+        }
+
+        /* --- dealer --- */
+        var DLR = [
+            ['PT. DEMO MOTOR MAKMUR', '1100101', 'ARMADA ASTRA', '081200000101', 'SALES DEMO A', 'MAKASSAR'],
+            ['CV. DEMO JAYA ABADI', '1100102', 'ARMADA ASTRA', '081200000101', 'SALES DEMO A', 'MAKASSAR'],
+            ['PT. DEMO SINAR BARU', '1100103', 'ARMADA ASTRA', '081200000101', 'SALES DEMO A', 'MAKASSAR'],
+            ['CV. DEMO PRIMA SEJAHTERA', '1100104', 'JNE', '081200000102', 'SALES DEMO A', 'MAKASSAR'],
+            ['PT. DEMO CITRA MOTOR', '1100105', 'ARMADA ASTRA', '081200000101', 'SALES DEMO B', 'GOWA'],
+            ['CV. DEMO BINTANG TIMUR', '1100106', 'ARMADA ASTRA', '081200000101', 'SALES DEMO B', 'GOWA'],
+            ['PT. DEMO MANDIRI MOTOR', '1100107', 'ABDI', '081200000103', 'SALES DEMO B', 'GOWA'],
+            ['CV. DEMO UTAMA SENTOSA', '1100108', 'ARMADA ASTRA', '081200000101', 'SALES DEMO C', 'MAROS'],
+            ['PT. DEMO KARYA PERSADA', '1100109', 'LION PARCEL', '081200000104', 'SALES DEMO C', 'MAROS'],
+            ['CV. DEMO LESTARI MOTOR', '1100110', 'ARMADA ASTRA', '081200000101', 'SALES DEMO C', 'MAROS'],
+            ['PT. DEMO NUSANTARA MOTOR', '1100111', 'ARMADA ASTRA', '081200000101', 'SALES DEMO D', 'PAREPARE'],
+            ['CV. DEMO SAHABAT MOTOR', '1100112', 'JNE', '081200000102', '', '']
+        ];
+        var dealerList = DLR.map(function (d, i) {
+            return { nama_customer: d[0], customer_no: d[1], ekspedisi: d[2], kontak_ekspedisi: d[3], sales_name: d[4], sales_area: d[5], _uploadedAt: nowMs, _uploadOrder: i };
+        });
+        var dealerEksp = {};
+        DLR.forEach(function (d) { dealerEksp[d[0].toUpperCase().replace(/\s+/g, ' ')] = d[2]; });
+
+        /* --- driver & GPS (peta contoh OpenStreetMap) --- */
+        var peta = 'https://www.openstreetmap.org/export/embed.html?bbox=119.38%2C-5.20%2C119.50%2C-5.08&layer=mapnik&marker=';
+        var DRV = ['ANDI/BUDI', 'CAKRA/DODI', 'EKO/FAJAR'];
+        var gps = {};
+        gps[DRV[0]] = peta + '-5.147%2C119.432';
+        gps[DRV[1]] = peta + '-5.135%2C119.462';
+        gps[DRV[2]] = peta + '-5.170%2C119.415';
+        gps['__PLAT__'] = {}; gps['__PLAT__'][DRV[0]] = 'DD 1001 DM'; gps['__PLAT__'][DRV[1]] = 'DD 1002 DM'; gps['__PLAT__'][DRV[2]] = 'DD 1003 DM';
+        var NONTETAP = { 'JNE': 'JNE', 'ABDI': 'ABDI', 'LION PARCEL': 'LION' };
+
+        var PROGRAM = ['PART MOTOR REGULER', 'PROGRAM OLI & PELUMAS', 'PAKET SERVIS BERKALA', 'AKSESORIS & KELISTRIKAN', 'PROGRAM CVT & KAMPAS REM'];
+        var PARTS = [['PRT-10234', 'KAMPAS REM DEPAN'], ['PRT-10871', 'FILTER UDARA'], ['PRT-11456', 'BUSI STANDAR'], ['PRT-12009', 'OLI MESIN 0.8L'],
+            ['PRT-12388', 'RANTAI KETENG SET'], ['PRT-13120', 'AKI 12V 3.5Ah'], ['PRT-13667', 'LAMPU DEPAN LED'], ['PRT-14002', 'SEAL SHOCK DEPAN'],
+            ['PRT-14455', 'V-BELT CVT'], ['PRT-15090', 'ROLLER SET CVT']];
+
+        /* --- surat jalan SAP (master), faktur, transaksi --- */
+        var N = 46, OUTSTANDING_N = 8;
+        var master = {}, faktur = [], transaksi = [], giso = {}, terinput = [], kembali = [];
+        for (var i = 0; i < N; i++) {
+            var off = -Math.floor((N - 1 - i) * 14 / N);
+            var d = DLR[i % DLR.length];
+            var shipment = String(8200610000 + i * 3);
+            var nb = (i % 3 === 0) ? 2 : 1, bills = [];
+            for (var k = 0; k < nb; k++) bills.push(String(9000450000 + i * 2 + k));
+            var offFaktur = off - ri(0, 2);
+            bills.forEach(function (b) { faktur.push({ no_faktur: b, tgl_faktur: iso(offFaktur), nama_customer: d[0], _uploadedAt: nowMs, _uploadOrder: faktur.length }); });
+            var koli = ri(5, 80);
+            var item = {
+                shipment: shipment, billing: bills.join(', '), nama_customer: d[0], tgl_created_on: iso(off - ri(0, 3)), tgl_faktur: iso(offFaktur),
+                jenis_kemasan: 'Koli', jumlah_koli: String(koli), isi_barang: pick(PROGRAM), ekspedisi: d[2], _uploadedAt: nowMs, _uploadOrder: i
+            };
+            master[shipment] = item;
+            item._off = off; item._dealer = d; item._koli = koli; item._bills = bills; item._offFaktur = offFaktur;
+        }
+        Object.keys(master).forEach(function (key, idx) {
+            var m = master[key], off = m._off, d = m._dealer;
+            if (idx < N - OUTSTANDING_N) {
+                var tetap = d[2] === 'ARMADA ASTRA';
+                var driver, plat = '', tanpaFoto = !tetap, status, podFoto = '', podAt;
+                if (tetap) {
+                    driver = DRV[idx % DRV.length]; plat = gps['__PLAT__'][driver];
+                    var lambat = (off >= -2) || (idx % 11 === 0);
+                    status = lambat ? 'BELUM KEMBALI' : 'OK';
+                    if (status === 'OK') { podFoto = foto(key, ['#f1f5f9', '#ecfeff', '#fefce8'][idx % 3]); podAt = nowMs + off * 86400000 + 3600000 * 5; }
+                } else {
+                    driver = NONTETAP[d[2]] || d[2]; status = 'OK';
+                }
+                var leadTime = Math.max(0, off - m._offFaktur);
+                var t = {
+                    tgl_kirim: iso(off), tgl_kirim_raw: iso(off), driver: driver, plat: plat, tanpa_foto: tanpaFoto, race: String((idx % 3) + 1),
+                    shipment: key, jenis_dokumen: 'SJ', isi_barang: m.isi_barang, sp_items: [], no_faktur: m.billing, jenis_kemasan: 'Koli',
+                    nama_dealer: d[0], no_customer: d[1], expedisi: d[2], total: m._koli, total_db: m._koli, leadTimeVal: leadTime,
+                    status: status, podFoto: podFoto, dibuat_at: nowMs + off * 86400000
+                };
+                if (podAt) t.pod_at = podAt;
+                transaksi.push(t); terinput.push(key);
+                if (status === 'OK' && !tanpaFoto) kembali.push(key);
+            }
+            if (idx % 3 !== 2) {   // sebagian besar punya data GI/SO (GISO)
+                var dl = String(8000770000 + idx * 5);
+                giso[dl] = { no_delivery: dl, shipment: key, kode_ba: pick(['BA01', 'BA02', 'BA03']), tgl_gi: iso(m._off - 1), _uploadedAt: nowMs, _uploadOrder: idx };
+            }
+        });
+        Object.keys(master).forEach(function (k) { delete master[k]._off; delete master[k]._dealer; delete master[k]._koli; delete master[k]._bills; delete master[k]._offFaktur; });
+
+        /* --- SP (surat pengantar) --- */
+        var SP = {}, spNos = [];
+        for (var s = 0; s < 12; s++) {
+            var dd = DLR[(s * 5) % DLR.length];
+            var no = (s === 3) ? 'SP-RANGKA-2610-004' : 'SP-DEMO-2610-' + pad(s + 1, 3);
+            var prog = pick(PROGRAM), its = [], tq = 0, nItem = ri(2, 4);
+            for (var q = 0; q < nItem; q++) { var pp = pick(PARTS), qy = ri(2, 24); its.push({ part: pp[0], qty: qy }); tq += qy; }
+            SP[no] = { no_sp: no, no_cust: dd[1], nama_dealer: dd[0], programs: [prog], items: its, total_qty: tq, program: prog, _uploadedAt: nowMs, _uploadBatchId: 'demo' };
+            spNos.push(no);
+        }
+        for (var sp = 0; sp < 6; sp++) {   // 6 SP pertama sudah dikirim, sisanya jadi OS Freegood
+            var key2 = spNos[sp], spd = SP[key2], offs = -ri(0, 9);
+            var rangka = /RANGKA/i.test(key2), tetap2 = !rangka && (sp % 2 === 0);
+            var drv = tetap2 ? DRV[sp % DRV.length] : 'JNE';
+            var stat = (rangka || !tetap2) ? 'OK' : (offs >= -3 ? 'BELUM KEMBALI' : 'OK');
+            var tt = {
+                tgl_kirim: iso(offs), tgl_kirim_raw: iso(offs), driver: drv, plat: tetap2 ? gps['__PLAT__'][drv] : '', tanpa_foto: !tetap2, race: '1',
+                shipment: key2, jenis_dokumen: 'SP', isi_barang: spd.program, sp_items: spd.items, no_faktur: '', jenis_kemasan: 'Koli',
+                nama_dealer: spd.nama_dealer, no_customer: spd.no_cust, expedisi: tetap2 ? 'ARMADA ASTRA' : 'JNE', total: ri(1, 12), total_db: null, leadTimeVal: 0,
+                status: stat, podFoto: '', dibuat_at: nowMs + offs * 86400000
+            };
+            if (tetap2 && stat === 'OK') { tt.podFoto = foto(key2, '#f1f5f9'); tt.pod_at = nowMs + offs * 86400000 + 4 * 3600000; kembali.push(key2); }
+            transaksi.push(tt); terinput.push(key2);
+        }
+        transaksi.sort(function (a, b) { return b.dibuat_at - a.dibuat_at; });
+
+        var totalSJ = transaksi.length, totalDO = 0, belumKembali = 0;
+        transaksi.forEach(function (t) { totalDO += (t.total || 0); if (t.status !== 'OK') belumKembali++; });
+
+        var outstanding = {};
+        for (var o = -7; o <= 0; o++) outstanding[iso(o)] = ri(3, 14);
+
+        /* --- status pesanan (tabel server palsu) --- */
+        var mKeys = Object.keys(master), spRows = [], rowNo = 0, idSeq = 1;
+        for (var od = 0; od < 38; od++) {
+            var ms = master[mKeys[od % mKeys.length]];
+            var dl2 = DLR.filter(function (x) { return x[0] === ms.nama_customer; })[0];
+            var shipped = od % 6 !== 5;   // beberapa order belum ada shipment
+            var nOrd = String(5100230000 + od * 4), nDel = String(8000990000 + od * 6), nLines = ri(2, 6);
+            var sdate = shipped ? dmy(-ri(0, 12)) : '';
+            for (var ln = 0; ln < nLines; ln++) {
+                var part = pick(PARTS);
+                var r = {
+                    id: idSeq++, nomor_order: nOrd, nomor_delivery: shipped ? nDel : '', nomor_customer: dl2[1], nama_customer: dl2[0], material: part[0], description: part[1],
+                    qty: String(ri(1, 20)), shipment_date: sdate, billing_no: shipped ? ms.billing.split(',')[0].trim() : '', shipment_no: shipped ? ms.shipment : '',
+                    batch_id: 'demo_batch', row_no: rowNo++, tanggal_upload: iso(-1)
+                };
+                spRows.push(r);
+            }
+        }
+        spRows.forEach(function (r) { r.cari = [r.nomor_order, r.nomor_delivery, r.nomor_customer, r.nama_customer, r.material, r.description, r.qty, r.shipment_date, r.billing_no, r.shipment_no].join(' ').toLowerCase(); });
+
+        /* --- akun (tabel profiles palsu) --- */
+        var tgl = new Date(nowMs - 20 * 86400000).toISOString();
+        function prof(id, username, name, role, status, extra) {
+            var p = { id: id, username: username, name: name, role: role, status: status, self_registered: false, created_at: tgl, approved_at: tgl, approved_by: 'demo.admin' };
+            for (var kx in (extra || {})) p[kx] = extra[kx];
+            return p;
+        }
+        var profiles = [
+            prof('demo-admin', 'demo.admin', 'Admin Demo', 'admin', 'active'),
+            prof('demo-warehouse', 'demo.warehouse', 'Warehouse Demo', 'warehouse', 'active'),
+            prof('demo-driver', 'demo.driver', 'Driver Demo', 'driver', 'active'),
+            prof('demo-sparepart', 'demo.sparepart', 'Sparepart Demo', 'sparepart', 'active'),
+            prof('demo-sales', 'demo.sales', 'SALES DEMO A', 'salespart', 'active', { sales_area: 'MAKASSAR' }),
+            prof('demo-sales-b', 'demo.sales.b', 'SALES DEMO B', 'salespart', 'active', { sales_area: 'GOWA' }),
+            prof('demo-dealer', 'demo.dealer', DLR[0][0], 'dealer', 'active', { dealer_name: DLR[0][0], customer_no: DLR[0][1] }),
+            prof('demo-dealer-2', 'demo.dealer2', DLR[4][0], 'dealer', 'active', { dealer_name: DLR[4][0], customer_no: DLR[4][1] }),
+            prof('demo-dealer-p1', 'demo.pending1', DLR[7][0], 'dealer', 'pending', { dealer_name: DLR[7][0], customer_no: DLR[7][1], self_registered: true, approved_at: null, approved_by: null }),
+            prof('demo-dealer-p2', 'demo.pending2', DLR[10][0], 'dealer', 'pending', { dealer_name: DLR[10][0], customer_no: DLR[10][1], self_registered: true, approved_at: null, approved_by: null })
+        ];
+
+        return {
+            shared: {
+                gudang_driver_gps: gps, gudang_db_shipment: master, gudang_db_dealer_ekspedisi: dealerEksp, gudang_db_dealer_list_raw: dealerList,
+                gudang_db_giso: giso, gudang_db_faktur_raw: faktur, gudang_db_sp: SP, gudang_shipment_terinput: terinput, gudang_transaksi: transaksi,
+                gudang_pengembalian_sj: kembali, gudang_outstanding_harian: outstanding
+            },
+            counters: { gudang_total_sj: totalSJ, gudang_total_do: totalDO, gudang_belum_kembali: belumKembali },
+            tables: { status_pesanan: spRows, profiles: profiles, app_store: [], dealer_public: [], sales_public: [] }
+        };
+    }
+
+    var DATA = buildData();
+    window.__DEMO_DATA = DATA;
+    window.__DEMO_DB = DATA.tables;
+
+    /* ---------- 3) client Supabase palsu (query builder + tabel di memori) ---------- */
+    function clone(o) { return o === undefined ? o : JSON.parse(JSON.stringify(o)); }
+    function escRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+    function likeRe(p) {
+        var re = '^';
+        for (var i = 0; i < p.length; i++) {
+            var c = p.charAt(i);
+            if (c === '\\' && i + 1 < p.length) re += escRe(p.charAt(++i));
+            else if (c === '%') re += '[\\s\\S]*';
+            else if (c === '_') re += '[\\s\\S]';
+            else re += escRe(c);
+        }
+        return new RegExp(re + '$', 'i');
+    }
+    function cmpv(a, b) {
+        var na = Number(a), nb = Number(b);
+        if (a !== '' && b !== '' && a != null && b != null && !isNaN(na) && !isNaN(nb)) return na - nb;
+        a = String(a == null ? '' : a); b = String(b == null ? '' : b);
+        return a < b ? -1 : (a > b ? 1 : 0);
+    }
+    function testRow(r, f) {
+        var op = f[0], v = r[f[1]], x = f[2], neg = false;
+        if (op.indexOf('not:') === 0) { neg = true; op = op.slice(4); }
+        var res;
+        switch (op) {
+            case 'eq': res = (v === x) || String(v) === String(x); break;
+            case 'neq': res = !((v === x) || String(v) === String(x)); break;
+            case 'gt': res = cmpv(v, x) > 0; break;
+            case 'gte': res = cmpv(v, x) >= 0; break;
+            case 'lt': res = cmpv(v, x) < 0; break;
+            case 'lte': res = cmpv(v, x) <= 0; break;
+            case 'in': res = (x || []).some(function (y) { return String(y) === String(v); }); break;
+            case 'ilike': case 'like': res = likeRe(String(x)).test(String(v == null ? '' : v)); break;
+            case 'is': res = (x === null) ? (v == null) : (v === x); break;
+            default: res = true;
+        }
+        return neg ? !res : res;
+    }
+
+    window.demoCreateClient = function () {
+        var DB = window.__DEMO_DB, urls = {};
+        function visible(table, rows) {
+            var p = window.__SB_PROFILE;
+            if (!p) return rows;
+            if (table === 'status_pesanan' && p.role === 'dealer') return rows.filter(function (r) { return String(r.nomor_customer) === String(p.customer_no); });
+            if (table === 'profiles' && p.role !== 'admin') return rows.filter(function (r) { return r.id === p.id; });
+            return rows;
+        }
+        function Q(table) { this.t = table; this.op = 'select'; this.f = []; this.ord = []; this.rg = null; this.lim = null; this.cnt = null; this.head = false; this.pl = null; this.one = null; this.ret = false; this.opts = {}; }
+        var P = Q.prototype;
+        P.select = function (cols, o) { if (this.op === 'select') { this.cnt = (o && o.count) || null; this.head = !!(o && o.head); } this.ret = true; return this; };
+        P.insert = function (v, o) { this.op = 'insert'; this.pl = v; this.opts = o || {}; return this; };
+        P.upsert = function (v, o) { this.op = 'upsert'; this.pl = v; this.opts = o || {}; return this; };
+        P.update = function (v) { this.op = 'update'; this.pl = v; return this; };
+        P.delete = function () { this.op = 'delete'; return this; };
+        ['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'in', 'ilike', 'like', 'is'].forEach(function (m) { P[m] = function (c, v) { this.f.push([m, c, v]); return this; }; });
+        P.not = function (c, op, v) { this.f.push(['not:' + op, c, v]); return this; };
+        P.order = function (c, o) { this.ord.push([c, !(o && o.ascending === false)]); return this; };
+        P.range = function (a, b) { this.rg = [a, b]; return this; };
+        P.limit = function (n) { this.lim = n; return this; };
+        P.single = function () { this.one = 'single'; return this; };
+        P.maybeSingle = function () { this.one = 'maybe'; return this; };
+        P.run = function () {
+            var self = this, table = DB[this.t] || (DB[this.t] = []);
+            var rows = visible(this.t, table).filter(function (r) { return self.f.every(function (f) { return testRow(r, f); }); });
+            if (this.op === 'delete') {
+                var del = new Set(rows); DB[this.t] = table.filter(function (r) { return !del.has(r); });
+                return { data: null, error: null, count: rows.length };
+            }
+            if (this.op === 'update') {
+                rows.forEach(function (r) { Object.assign(r, self.pl); });
+                return { data: this.ret ? clone(rows) : null, error: null, count: rows.length };
+            }
+            if (this.op === 'insert' || this.op === 'upsert') {
+                var list = Array.isArray(this.pl) ? this.pl : [this.pl], added = [];
+                list.forEach(function (rec) {
+                    rec = clone(rec);
+                    var idx = -1;
+                    if (self.t === 'app_store') idx = table.findIndex(function (x) { return x.key === rec.key; });
+                    else if (self.t === 'status_pesanan') idx = table.findIndex(function (x) { return x.batch_id === rec.batch_id && x.row_no === rec.row_no; });
+                    else if (rec.id != null) idx = table.findIndex(function (x) { return x.id === rec.id; });
+                    if (idx >= 0) { if (self.op === 'upsert' && !self.opts.ignoreDuplicates) { table[idx] = Object.assign(table[idx], rec); added.push(table[idx]); } return; }
+                    if (self.t === 'status_pesanan') {
+                        rec.id = table.reduce(function (m, x) { return Math.max(m, x.id || 0); }, 0) + 1;
+                        rec.cari = [rec.nomor_order, rec.nomor_delivery, rec.nomor_customer, rec.nama_customer, rec.material, rec.description, rec.qty, rec.shipment_date, rec.billing_no, rec.shipment_no].join(' ').toLowerCase();
+                    } else if (self.t === 'profiles' && rec.id == null) {
+                        rec.id = 'demo-' + Math.random().toString(36).slice(2, 10);
+                    }
+                    table.push(rec); added.push(rec);
+                });
+                return { data: this.ret ? clone(added) : null, error: null };
+            }
+            var total = rows.length;
+            if (this.ord.length) {
+                var ord = this.ord;
+                rows = rows.slice().sort(function (a, b) { for (var i = 0; i < ord.length; i++) { var c = cmpv(a[ord[i][0]], b[ord[i][0]]); if (c) return ord[i][1] ? c : -c; } return 0; });
+            }
+            if (this.rg) rows = rows.slice(this.rg[0], this.rg[1] + 1);
+            if (this.lim != null) rows = rows.slice(0, this.lim);
+            var out = { data: this.head ? null : clone(rows), error: null };
+            if (this.cnt) out.count = total;
+            if (this.one) {
+                out.data = rows[0] ? clone(rows[0]) : null;
+                if (this.one === 'single' && !rows[0]) out.error = { message: 'Data tidak ditemukan' };
+            }
+            return out;
+        };
+        P.then = function (res, rej) {
+            var r; try { r = Promise.resolve(this.run()); } catch (e) { r = Promise.reject(e); }
+            return r.then(res, rej);
+        };
+        var chan = { on: function () { return chan; }, subscribe: function () { return chan; }, unsubscribe: function () {} };
+        return {
+            from: function (t) { return new Q(t); },
+            rpc: function () { return Promise.resolve({ data: 0, error: null }); },
+            channel: function () { return chan; },
+            removeChannel: function () {},
+            auth: {
+                signOut: function () { return Promise.resolve({ error: null }); },
+                getSession: function () { return Promise.resolve({ data: { session: null } }); },
+                onAuthStateChange: function () { return { data: { subscription: { unsubscribe: function () {} } } }; },
+                signInWithPassword: function () { return Promise.resolve({ data: null, error: { message: 'Mode demo: login dinonaktifkan' } }); },
+                signUp: function () { return Promise.resolve({ data: null, error: { message: 'Mode demo: pendaftaran dinonaktifkan' } }); }
+            },
+            storage: {
+                from: function () {
+                    return {
+                        upload: function (path, blob) { try { urls[path] = URL.createObjectURL(blob); } catch (e) {} return Promise.resolve({ data: { path: path }, error: null }); },
+                        getPublicUrl: function (path) { return { data: { publicUrl: urls[path] || '' } }; },
+                        remove: function () { return Promise.resolve({ data: [], error: null }); },
+                        list: function () { return Promise.resolve({ data: [], error: null }); }
+                    };
+                }
+            }
+        };
+    };
+
+    /* ---------- 4) pembuatan akun di mode demo (tidak membuat akun sungguhan) ---------- */
+    window.demoBuatUser = function (o) {
+        var t = window.__DEMO_DB.profiles;
+        if (t.some(function (p) { return p.username === o.username; })) return Promise.resolve({ ok: false, msg: 'Username sudah digunakan. Silakan pilih username lain.' });
+        var now = new Date().toISOString();
+        t.push({ id: 'demo-' + Math.random().toString(36).slice(2, 10), username: o.username, name: o.name, role: o.role, status: 'active', self_registered: false, created_at: now, approved_at: now, approved_by: 'demo.admin' });
+        return Promise.resolve({ ok: true });
+    };
+
+    /* ---------- 5) UI: pemilih role + lencana DEMO ---------- */
+    var ROLES = [
+        { id: 'admin', label: 'Admin Gudang', icon: 'fa-user-shield', desc: 'Akses penuh: laporan, database, approval, user, dashboard' },
+        { id: 'warehouse', label: 'Warehouse Kima', icon: 'fa-warehouse', desc: 'Input surat jalan keluar, kembali, outstanding, dashboard' },
+        { id: 'driver', label: 'Driver', icon: 'fa-truck', desc: 'Upload foto bukti tanda terima (POD)' },
+        { id: 'dealer', label: 'Dealer', icon: 'fa-store', desc: 'Laporan pengiriman & status pesanan milik dealer' },
+        { id: 'sparepart', label: 'Sparepart', icon: 'fa-gears', desc: 'Melihat laporan pengiriman' },
+        { id: 'salespart', label: 'Salesman Part', icon: 'fa-user-tie', desc: 'Laporan & status pesanan dealer di areanya' }
+    ];
+    var PROFIL_ROLE = { admin: 'demo-admin', warehouse: 'demo-warehouse', driver: 'demo-driver', dealer: 'demo-dealer', sparepart: 'demo-sparepart', salespart: 'demo-sales' };
+    function urlRole(r) { return location.pathname + '?demo=1' + (r ? '&role=' + r : ''); }
+
+    var css = document.createElement('style');
+    css.textContent =
+        'body.demo-picking #loginWrapper,body.demo-picking #appContainer{display:none!important}' +
+        '#demoPicker{position:fixed;inset:0;z-index:100000;overflow:auto;background:linear-gradient(135deg,#eef2ff,#f5f3ff 45%,#fff7ed);font-family:Inter,system-ui,sans-serif;padding:32px 16px}' +
+        '#demoPicker .dp-wrap{max-width:860px;margin:0 auto}' +
+        '#demoPicker h1{font-size:1.6rem;font-weight:800;color:#0f172a;margin:0 0 4px}' +
+        '#demoPicker .dp-sub{color:#475569;margin-bottom:6px}' +
+        '#demoPicker .dp-note{display:inline-block;background:#fef3c7;color:#92400e;border-radius:10px;padding:8px 12px;font-size:.85rem;font-weight:600;margin:10px 0 22px}' +
+        '#demoPicker .dp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px}' +
+        '#demoPicker a.dp-card{display:flex;gap:14px;align-items:flex-start;text-decoration:none;background:#fff;border:1.5px solid #e2e8f0;border-radius:16px;padding:16px;color:#0f172a;transition:transform .15s,box-shadow .15s,border-color .15s}' +
+        '#demoPicker a.dp-card:hover{transform:translateY(-2px);box-shadow:0 12px 26px rgba(67,97,238,.16);border-color:#4361ee}' +
+        '#demoPicker .dp-ic{flex:none;width:44px;height:44px;border-radius:12px;background:#eef2ff;color:#4361ee;display:flex;align-items:center;justify-content:center;font-size:1.1rem}' +
+        '#demoPicker .dp-t{font-weight:700}#demoPicker .dp-d{font-size:.82rem;color:#64748b;margin-top:2px}' +
+        '#demoBadge{position:fixed;right:12px;bottom:12px;z-index:1030;display:flex;align-items:center;gap:8px;background:rgba(15,23,42,.92);color:#fff;border-radius:999px;padding:6px 8px 6px 12px;font:600 12px Inter,system-ui,sans-serif;box-shadow:0 6px 20px rgba(0,0,0,.28)}' +
+        '#demoBadge .dt{background:#f59e0b;color:#111827;border-radius:999px;padding:2px 8px;font-weight:800;letter-spacing:.04em}' +
+        '#demoBadge select{background:#1e293b;color:#fff;border:1px solid #334155;border-radius:999px;font-size:12px;padding:3px 8px;max-width:150px}' +
+        '#demoBadge button{background:#334155;color:#fff;border:0;border-radius:999px;font-size:12px;padding:4px 10px;cursor:pointer}' +
+        '#demoBadge button:hover{background:#475569}';
+    document.head.appendChild(css);
+
+    window.demoKeluar = function () { location.href = urlRole(''); };
+
+    function tampilPemilih() {
+        document.body.classList.add('demo-picking');
+        var el = document.createElement('div');
+        el.id = 'demoPicker';
+        el.innerHTML = '<div class="dp-wrap"><h1>PARTTRACK &mdash; Mode Demo</h1>' +
+            '<div class="dp-sub">Pilih role untuk melihat tampilan dan fitur aplikasi. Tidak perlu login.</div>' +
+            '<div class="dp-note"><i class="fas fa-flask me-1"></i> Semua data di sini hanya CONTOH (bukan data asli). Perubahan tidak tersimpan dan hilang saat halaman di-refresh.</div>' +
+            '<div class="dp-grid">' + ROLES.map(function (r) {
+                return '<a class="dp-card" href="' + urlRole(r.id) + '"><div class="dp-ic"><i class="fas ' + r.icon + '"></i></div><div><div class="dp-t">' + r.label + '</div><div class="dp-d">' + r.desc + '</div></div></a>';
+            }).join('') + '</div></div>';
+        document.body.appendChild(el);
+    }
+
+    function pasangLencana(role) {
+        var b = document.createElement('div');
+        b.id = 'demoBadge';
+        b.innerHTML = '<span class="dt">DEMO</span><select id="demoRoleSel" aria-label="Ganti role">' +
+            ROLES.map(function (r) { return '<option value="' + r.id + '"' + (r.id === role ? ' selected' : '') + '>' + r.label + '</option>'; }).join('') +
+            '</select><button type="button" id="demoReset" title="Kembalikan data contoh seperti semula">Reset</button>';
+        document.body.appendChild(b);
+        document.getElementById('demoRoleSel').addEventListener('change', function () { location.href = urlRole(this.value); });
+        document.getElementById('demoReset').addEventListener('click', function () { location.reload(); });
+    }
+
+    /* ---------- 6) boot mode demo (dipanggil dari boot() di bawah) ---------- */
+    window.demoBoot = async function () {
+        var role = qs.get('role');
+        if (!PROFIL_ROLE[role]) { sembunyiSplash(); tampilPemilih(); return; }
+        var p = window.__DEMO_DB.profiles.filter(function (x) { return x.id === PROFIL_ROLE[role]; })[0];
+        window.__SB_PROFILE = p;
+        setSesiLokal(p);
+        Object.keys(DATA.shared).forEach(function (k) { lsSet(k, JSON.stringify(DATA.shared[k])); });
+        Object.keys(DATA.counters).forEach(function (k) { lsSet(k, String(DATA.counters[k])); });
+        await muatProfilDariServer();
+        jalankanAplikasi();
+        sembunyiSplash();
+        pasangLencana(role);
+        try { tampilkanSambutan(true); } catch (e) {}
+    };
+})();
+
+    </script>
+    <script>
     const SUPABASE_URL = 'https://mqcclwczxafbudfbbghn.supabase.co';
     const SUPABASE_ANON_KEY = 'sb_publishable_AN3SJMzfRPnmYvagmXFO6Q_IZxC2G8s';
 
@@ -2325,7 +2780,7 @@
     ];
 
     const SB_CONFIG_OK = !/GANTI/.test(SUPABASE_URL + SUPABASE_ANON_KEY);
-    const sb = SB_CONFIG_OK ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+    const sb = window.DEMO_MODE ? window.demoCreateClient() : (SB_CONFIG_OK ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null);
 
     window.__SB_PROFILE = null;
     window.__SB_DATA_DI_SERVER = false;
@@ -2456,6 +2911,7 @@
 
     // Admin membuat akun: pakai client terpisah agar sesi admin tidak tertimpa
     async function sbAdminBuatUser({ username, password, name, role }) {
+        if (window.DEMO_MODE) return window.demoBuatUser({ username, name, role });   // demo: tidak membuat akun sungguhan
         const c2 = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
             auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'sb-tmp-admin-create' }
         });
@@ -2492,6 +2948,7 @@
     }
 
     async function sbLogout() {
+        if (window.DEMO_MODE) { window.demoKeluar(); return; }
         sbFlush();
         try { await sb.auth.signOut(); } catch (e) {}
         hapusSesiLokal();
@@ -2501,6 +2958,7 @@
         location.reload();
     }
     async function sbKeluarPaksa() {
+        if (window.DEMO_MODE) { window.demoKeluar(); return; }
         try { await sb.auth.signOut(); } catch (e) {}
         hapusSesiLokal();
         await idbHapusSemua();
@@ -2513,6 +2971,7 @@
     const timers = {};
 
     function bolehTulis(key) {
+        if (window.DEMO_MODE) return false;   // demo: tidak ada yang dikirim ke server
         const r = window.__SB_PROFILE && window.__SB_PROFILE.role;
         if (r === 'admin') return SHARED_KEYS.includes(key);
         if (r === 'driver') return DRIVER_KEYS.includes(key);
@@ -2826,6 +3285,7 @@
     }
 
     (async function boot() {
+        if (window.DEMO_MODE) { await window.demoBoot(); return; }
         if (!SB_CONFIG_OK) {
             sembunyiSplash();
             sbTampilkanError('Supabase belum dikonfigurasi', 'Isi SUPABASE_URL dan SUPABASE_ANON_KEY di index.html (Supabase → Project Settings → API).', false);
