@@ -799,7 +799,7 @@
                     </button>
                 </li>
                 <!-- MENU BARU: STATUS PESANAN -->
-                <li class="nav-item role-menu admin-dealer sales-status" role="presentation">
+                <li class="nav-item role-menu sp-access admin-dealer sales-status" role="presentation">
                     <button class="nav-link w-100 text-start" data-bs-toggle="pill" data-bs-target="#menu-status-pesanan" type="button" role="tab" onclick="muatDataStatusPesanan()">
                         <i class="fas fa-clipboard-check"></i><span>Status Pesanan</span>
                     </button>
@@ -869,12 +869,12 @@
                         <i class="fas fa-chart-line"></i><span>Dashboard & Grafik</span>
                     </button>
                 </li>
-                <li class="nav-item role-menu wh-access admin-only" role="presentation">
+                <li class="nav-item role-menu sp-access wh-access admin-only" role="presentation">
                     <button class="nav-link w-100 text-start" data-bs-toggle="pill" data-bs-target="#menu-laporan-bulanan" type="button" role="tab" onclick="muatLaporanBulanan()">
                         <i class="fas fa-calendar-check"></i><span>Laporan Bulanan</span>
                     </button>
                 </li>
-                <li class="nav-item role-menu wh-access admin-only" role="presentation">
+                <li class="nav-item role-menu sp-access wh-access admin-only" role="presentation">
                     <button class="nav-link w-100 text-start" data-bs-toggle="pill" data-bs-target="#menu-rekap-harian" type="button" role="tab" onclick="muatRekapHarian()">
                         <i class="fas fa-table-list"></i><span>Rekap Harian</span>
                     </button>
@@ -1704,7 +1704,7 @@
                             <h5 class="mb-0 fw-bold"><i class="fas fa-calendar-check text-primary me-2"></i>Laporan Bulanan Pengiriman</h5>
                             <div class="d-flex gap-2 align-items-center flex-wrap">
                                 <input type="month" id="lapBulan" class="form-control form-control-sm" style="width:160px;" onchange="muatLaporanBulanan()">
-                                <button class="btn btn-info btn-sm fw-bold text-white shadow-sm" onclick="analisaLaporanBulanan()"><i class="fas fa-robot me-1"></i> Analisa AI</button>
+                                <button id="btnAnalisaAI" class="btn btn-info btn-sm fw-bold text-white shadow-sm" onclick="analisaLaporanBulanan()" ><i class="fas fa-robot me-1"></i> Analisa AI</button>
                                 <button class="btn btn-success btn-sm fw-bold shadow-sm" onclick="eksporLaporanBulanan()"><i class="fas fa-file-excel me-1"></i> Ekspor Excel</button>
                             </div>
                         </div>
@@ -2734,11 +2734,8 @@
     }
 
     /* ---------- 6) boot mode demo (dipanggil dari boot() di bawah) ---------- */
-window.demoBoot = async function () {
-    if (document.readyState === 'loading') {
-        await new Promise(function (r) { document.addEventListener('DOMContentLoaded', r); });
-    }
-    var role = qs.get('role');
+    window.demoBoot = async function () {
+        var role = qs.get('role');
         if (!PROFIL_ROLE[role]) { sembunyiSplash(); tampilPemilih(); return; }
         var p = window.__DEMO_DB.profiles.filter(function (x) { return x.id === PROFIL_ROLE[role]; })[0];
         window.__SB_PROFILE = p;
@@ -4506,11 +4503,14 @@ window.demoBoot = async function () {
             } else if (currentRole === 'warehouse') {
                 document.getElementById('userRoleBadge').innerText = `Warehouse Kima • ${currentUsername || 'User'}`;
                 document.querySelectorAll('.wh-access').forEach(el => el.style.display = 'block');
+                document.querySelectorAll('.report-access').forEach(el => el.style.display = 'block');
                 aktifkanTabAwal('#menu-keluar');
             } else if (currentRole === 'sparepart' || currentRole === 'salespart') {
                 const label = currentRole === 'sparepart' ? 'Sparepart' : 'Salesman Part';
                 document.getElementById('userRoleBadge').innerText = `${label} • ${currentUsername || 'User'}`;
                 document.querySelectorAll('.report-access').forEach(el => el.style.display = 'block');
+                if (currentRole === 'sparepart') { const b = document.getElementById('btnAnalisaAI'); if (b) b.style.display = 'none'; }
+                if (currentRole === 'sparepart') document.querySelectorAll('.sp-access').forEach(el => el.style.display = 'block');
                 if (currentRole === 'salespart') document.querySelectorAll('.sales-status').forEach(el => el.style.display = 'block');
                 aktifkanTabAwal('#menu-laporan');
                 renderLaporanUlang();
@@ -8459,7 +8459,7 @@ if (_sudahAda) {
             lapCache = { C, P, ym, pym };
             const bn = lapNamaBulan(ym), pn = lapNamaBulan(pym);
 
-            document.getElementById('lapInfo').innerHTML = `Periode <b>${bn}</b> dibandingkan dengan <b>${pn}</b>. Klik <b>Analisa AI</b> untuk ringkasan pencapaian otomatis.`;
+            document.getElementById('lapInfo').innerHTML = `Periode <b>${bn}</b> dibandingkan dengan <b>${pn}</b>. ${currentRole === 'sparepart' ? '' : 'Klik <b>Analisa AI</b> untuk ringkasan pencapaian otomatis.'}`;
             document.getElementById('lapAI').innerHTML = '';
 
             // KPI
@@ -8644,6 +8644,7 @@ if (_sudahAda) {
         }
 
         function analisaLaporanBulanan() {
+            if (currentRole === 'sparepart') return;
             if (!lapCache) muatLaporanBulanan();
             const { C, P, ym, pym } = lapCache;
             const A = lapBuatAnalisa(C, P, ym, pym);
