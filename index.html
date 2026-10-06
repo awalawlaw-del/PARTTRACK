@@ -4784,9 +4784,8 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
         function isDokOK(item) {
             if (!item) return false;
             if (isTanpaFoto(item)) return true;
-            // Butuh foto: SP OK hanya bila sudah ada foto / dikonfirmasi kembali (abaikan status OK otomatis dari data lama)
-            if (item.jenis_dokumen === 'SP') return !!item.podFoto || pengembalianSJList.includes(item.shipment);
-            return item.status === 'OK' || pengembalianSJList.includes(item.shipment);
+            // Wajib foto: OK hanya jika sudah dikonfirmasi di menu Pengembalian SJ (foto driver saja tidak cukup)
+            return pengembalianSJList.includes(item.shipment);
         }
 
         // DALAM PENGANTARAN = surat jalan (bukan SP) yang belum ada foto bukti (POD) dari driver.
@@ -7430,6 +7429,16 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
             });
         }
 
+        function pilihShipmentDriver(shipment) {
+            const inp = document.getElementById('driverShipment');
+            const foto = document.getElementById('driverFotoPOD');
+            inp.value = String(shipment).toUpperCase();
+            document.getElementById('formDriverPOD').scrollIntoView({ behavior: 'smooth', block: 'center' });
+            inp.classList.add('is-valid');
+            setTimeout(() => inp.classList.remove('is-valid'), 1500);
+            setTimeout(() => { try { foto.click(); } catch (e) { foto.focus(); } }, 350);   // langsung buka kamera/pilih foto
+        }
+
         function muatTabelDriverPOD() {
             let tbody = document.getElementById('tabelDriverPOD');
             if (!tbody) return;
@@ -7449,7 +7458,7 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
                 tbody.innerHTML += `
                     <tr>
                         <td>${formatDateToDisplay(item.tgl_kirim)}</td>
-                        <td class="fw-bold">${String(item.shipment || '').toUpperCase()}</td>
+                        <td><span class="clickable-shipment" title="Klik untuk upload foto" onclick="pilihShipmentDriver(decodeURIComponent('${encodeURIComponent(item.shipment)}'))">${dbSafe(String(item.shipment || '').toUpperCase())}</span></td>
                         <td>${item.nama_dealer}</td>
                         <td><span class="badge ${item.status === 'OK' ? 'bg-success' : 'bg-danger'}">${item.status}</span></td>
                         <td>${badgePOD}</td>
@@ -8164,6 +8173,16 @@ if (_sudahAda) {
             }
         });
 
+        ['driverShipment', 'inputScanKembali'].forEach(id => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.style.textTransform = 'uppercase';
+            el.addEventListener('input', function () {
+                const up = this.value.toUpperCase();
+                if (up !== this.value) { const p = this.selectionStart; this.value = up; try { this.setSelectionRange(p, p); } catch (e) {} }
+            });
+        });
+
         document.getElementById('inputScanKembali').addEventListener('keydown', function(e) {
             if (e.key === 'Enter') {
                 e.preventDefault();
@@ -8175,25 +8194,24 @@ if (_sudahAda) {
             let val = document.getElementById('inputScanKembali').value.trim();
             if (!val) return;
 
-            let item = transaksiData.find(i => i.shipment === val);
+            let item = transaksiData.find(i => dbKey(i.shipment) === dbKey(val));
             if (!item) {
                 alert(`Nomor Shipment ${val} tidak ditemukan dalam data pengiriman!`);
                 return;
             }
+            val = item.shipment;
 
-            if (item.status === 'OK' || pengembalianSJList.includes(val)) {
+            if (pengembalianSJList.includes(val)) {
                 alert(`Shipment ${val} sudah berstatus OK / Telah Dikembalikan sebelumnya.`);
                 document.getElementById('inputScanKembali').value = "";
                 return;
             }
 
             item.status = 'OK';
-            if (!pengembalianSJList.includes(val)) pengembalianSJList.push(val);
-            belumKembali = Math.max(0, belumKembali - 1);
+            pengembalianSJList.push(val);
 
             localStorage.setItem('gudang_transaksi', JSON.stringify(transaksiData));
             localStorage.setItem('gudang_pengembalian_sj', JSON.stringify(pengembalianSJList));
-            localStorage.setItem('gudang_belum_kembali', belumKembali);
 
             document.getElementById('inputScanKembali').value = "";
             updateStatistikUI();
@@ -8262,15 +8280,16 @@ if (_sudahAda) {
 
         document.getElementById('formDriverPOD').addEventListener('submit', function(e) {
             e.preventDefault();
-            let ship = document.getElementById('driverShipment').value.trim();
+            let ship = document.getElementById('driverShipment').value.trim().toUpperCase();
             let fileInput = document.getElementById('driverFotoPOD');
             if (!ship || fileInput.files.length === 0) return;
 
-            let item = transaksiData.find(i => i.shipment === ship);
+            let item = transaksiData.find(i => dbKey(i.shipment) === dbKey(ship));
             if (!item) {
                 alert(`Nomor Shipment ${ship} tidak ditemukan pada daftar pengiriman!`);
                 return;
             }
+            ship = item.shipment;
 
             let file = fileInput.files[0];
             const tombol = this.querySelector('button[type="submit"]');
@@ -8282,13 +8301,8 @@ if (_sudahAda) {
                     const urlFoto = await unggahFotoStorage(kecil, ship);
                     item.podFoto = urlFoto;
                     item.pod_at = Date.now();
-                    item.status = 'OK';
-                    if (!pengembalianSJList.includes(ship)) pengembalianSJList.push(ship);
-                    belumKembali = Math.max(0, belumKembali - 1);
-
+                    // status TIDAK diubah: tetap BELUM KEMBALI sampai dikonfirmasi di menu Pengembalian SJ
                     localStorage.setItem('gudang_transaksi', JSON.stringify(transaksiData));
-                    localStorage.setItem('gudang_pengembalian_sj', JSON.stringify(pengembalianSJList));
-                    localStorage.setItem('gudang_belum_kembali', belumKembali);
 
                     document.getElementById('driverShipment').value = "";
                     fileInput.value = "";
