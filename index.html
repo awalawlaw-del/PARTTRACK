@@ -1234,8 +1234,14 @@
                             <hr class="my-4">
                             <div class="d-flex justify-content-between align-items-center mb-3">
                                 <h6 class="fw-bold text-secondary mb-0">Daftar Pengiriman Menunggu Bukti Foto (25 Data/Halaman)</h6>
-                                <div style="width: 250px;">
-                                    <input type="text" class="form-control form-control-sm" id="searchDriver" placeholder="Cari Shipment/Customer..." oninput="muatTabelDriverPOD()">
+                                <div class="d-flex align-items-center gap-3 flex-wrap justify-content-end">
+                                    <div class="form-check form-switch mb-0">
+                                        <input class="form-check-input" type="checkbox" id="driverSemuaSJ" onchange="currentPageDriver=1; muatTabelDriverPOD()">
+                                        <label class="form-check-label small fw-semibold" for="driverSemuaSJ">Tampilkan semua SJ</label>
+                                    </div>
+                                    <div style="width: 250px;">
+                                        <input type="text" class="form-control form-control-sm" id="searchDriver" placeholder="Cari Shipment/Customer..." oninput="muatTabelDriverPOD()">
+                                    </div>
                                 </div>
                             </div>
                             <div class="table-responsive">
@@ -7414,14 +7420,52 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
             renderLaporanUlang();
         }
 
+        // Jarak edit (Levenshtein) untuk toleransi typo nama driver
+        function jarakEdit(a, b) {
+            if (a === b) return 0;
+            const m = a.length, n = b.length;
+            if (Math.abs(m - n) > 2) return 3;
+            let prev = Array.from({ length: n + 1 }, (_, j) => j);
+            for (let i = 1; i <= m; i++) {
+                const cur = [i];
+                for (let j = 1; j <= n; j++) {
+                    cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+                }
+                prev = cur;
+            }
+            return prev[n];
+        }
+
+        // Apakah SJ ini milik driver yang sedang login? Dicocokkan per orang: "AMIR" cocok dengan "AMIR/TYO", "TYO/AMIR", atau "AMIR".
+        function sjMilikDriverLogin(item) {
+            const profil = window.__SB_PROFILE || {};
+            const kata = [];
+            [profil.name, profil.username].forEach(v => {
+                String(v || '').toUpperCase().split(/[^A-Z0-9]+/).filter(x => x.length >= 2).forEach(x => kata.push(x));
+            });
+            if (!kata.length) return true;   // identitas tidak diketahui -> jangan sembunyikan apa pun
+            const token = pecahNamaDriver(item.driver).flatMap(t => t.split(/\s+/)).filter(Boolean);
+            return token.some(t => kata.some(k => {
+                if (t === k) return true;
+                const pendek = Math.min(t.length, k.length);
+                if (pendek >= 4 && jarakEdit(t, k) <= 1) return true;   // typo 1 huruf
+                return false;
+            }));
+        }
+
         // Driver Portal hanya menampilkan surat jalan yang BELUM ada foto POD-nya.
         function getDataDriverPOD() {
             let searchVal = document.getElementById('searchDriver') ? document.getElementById('searchDriver').value.toLowerCase() : "";
             let startVal = document.getElementById('driverStart') ? document.getElementById('driverStart').value : "";
             let endVal = document.getElementById('driverEnd') ? document.getElementById('driverEnd').value : "";
 
+            // Driver hanya melihat SJ miliknya (cocok per ORANG, toleran typo kecil), kecuali "Tampilkan semua SJ" dicentang.
+            const semua = !!(document.getElementById('driverSemuaSJ') && document.getElementById('driverSemuaSJ').checked);
+            const saring = currentRole === 'driver' && !semua;
+
             return transaksiData.filter(i => {
                 if (!isDalamPengantaran(i)) return false;
+                if (saring && !sjMilikDriverLogin(i)) return false;
                 let tgl = cleanDateOnly(i.tgl_kirim || i.tgl_kirim_raw);
                 if (startVal && tgl < startVal) return false;
                 if (endVal && tgl > endVal) return false;
