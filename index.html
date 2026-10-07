@@ -1309,6 +1309,7 @@
                                 <button class="btn btn-sm btn-outline-danger" onclick="hapusFilterTanggal('outStart', 'outEnd'); muatDataOutstanding();"><i class="fas fa-times me-1"></i>Hapus Tgl</button>
                                 <input type="text" class="form-control form-control-sm" id="searchOut" placeholder="Cari Outstanding..." oninput="muatDataOutstanding()">
                                 <button class="btn btn-outline-danger btn-sm fw-bold shadow-sm text-nowrap" onclick="muatDataOutstanding()"><i class="fas fa-sync-alt me-1"></i> Refresh</button>
+                                <button class="btn btn-success btn-sm fw-bold shadow-sm text-nowrap" onclick="eksporOutstanding()" title="Ekspor sesuai filter tanggal & pencarian"><i class="fas fa-file-excel me-1"></i> Ekspor</button>
                             </div>
                         </div>
                         <div class="card-body">
@@ -1382,6 +1383,7 @@
                                 <button class="btn btn-sm btn-outline-danger" onclick="hapusFilterTanggal('gisoStart', 'gisoEnd'); muatDataOSGISO();"><i class="fas fa-times me-1"></i>Hapus Tgl</button>
                                 <button class="btn btn-danger btn-sm fw-bold text-nowrap" onclick="hapusGISOBerdasarkanTanggal()"><i class="fas fa-trash me-1"></i> Hapus Rentang Tgl GI</button>
                                 <button class="btn btn-outline-warning btn-sm fw-bold text-dark shadow-sm text-nowrap" onclick="muatDataOSGISO()"><i class="fas fa-sync-alt me-1"></i> Refresh</button>
+                                <button class="btn btn-success btn-sm fw-bold shadow-sm text-nowrap" onclick="eksporOSGISO()" title="Ekspor sesuai filter tanggal GI & pencarian"><i class="fas fa-file-excel me-1"></i> Ekspor</button>
                             </div>
                         </div>
                         <div class="card-body">
@@ -1973,6 +1975,7 @@
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body p-4">
+                    <div class="small text-muted mb-3"><i class="fas fa-pen me-1"></i>Klik nomor Shipment / SJ untuk mengedit tanggal kirim, driver, dll dan mengisi keterangan kenapa belum kembali.</div>
                     <div class="table-responsive">
                         <table class="table table-bordered table-striped align-middle text-center">
                             <thead class="table-dark">
@@ -1985,6 +1988,7 @@
                                     <th>Ekspedisi</th>
                                     <th>Driver</th>
                                     <th>Status</th>
+                                    <th>Keterangan</th>
                                 </tr>
                             </thead>
                             <tbody id="tabelModalBelumKembali"></tbody>
@@ -1992,6 +1996,7 @@
                     </div>
                 </div>
                 <div class="modal-footer bg-light border-top">
+                    <button type="button" class="btn btn-success btn-sm fw-bold me-auto" onclick="eksporBelumKembali()"><i class="fas fa-file-excel me-1"></i> Ekspor Excel</button>
                     <button type="button" class="btn btn-secondary btn-sm fw-bold" data-bs-dismiss="modal">Tutup</button>
                 </div>
             </div>
@@ -2007,7 +2012,7 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body p-4">
-                    <div class="small text-muted mb-3"><i class="fas fa-info-circle me-1"></i>Surat Jalan / SP yang belum diunggah bukti foto tanda terima (POD) oleh driver. Otomatis hilang dari daftar ini setelah foto di-upload. SP Rangka dan driver tidak tetap (ABDI, JNE, dll) tidak dihitung karena tidak memerlukan foto.</div>
+                    <div class="small text-muted mb-3"><i class="fas fa-info-circle me-1"></i>Surat Jalan / SP yang belum diunggah bukti foto tanda terima (POD) oleh driver. Otomatis hilang dari daftar ini setelah foto di-upload. SP Rangka dan driver tidak tetap (ABDI, JNE, dll) tidak dihitung karena tidak memerlukan foto. Klik nomor Shipment / SJ untuk mengedit data dan mengisi keterangan.</div>
                     <div class="table-responsive">
                         <table class="table table-bordered table-striped align-middle text-center">
                             <thead class="table-dark">
@@ -2020,6 +2025,7 @@
                                     <th>Ekspedisi</th>
                                     <th>Driver</th>
                                     <th>Status</th>
+                                    <th>Keterangan</th>
                                     <th>Aksi</th>
                                 </tr>
                             </thead>
@@ -2028,6 +2034,7 @@
                     </div>
                 </div>
                 <div class="modal-footer bg-light border-top">
+                    <button type="button" class="btn btn-success btn-sm fw-bold me-auto" onclick="eksporDalamPengantaran()"><i class="fas fa-file-excel me-1"></i> Ekspor Excel</button>
                     <button type="button" class="btn btn-secondary btn-sm fw-bold" data-bs-dismiss="modal">Tutup</button>
                 </div>
             </div>
@@ -2233,6 +2240,10 @@
                             <option value="BELUM KEMBALI">BELUM KEMBALI</option>
                             <option value="OK">OK</option>
                         </select>
+                    </div>
+                    <div class="mb-1">
+                        <label class="form-label fw-bold small">Keterangan Kenapa Belum Kembali <span class="text-muted">(isi manual, opsional)</span></label>
+                        <textarea class="form-control" id="editKeterangan" rows="3" placeholder="Contoh: SJ masih di dealer, menunggu tanda tangan / driver cuti / barang retur..."></textarea>
                     </div>
                 </div>
                 <div class="modal-footer border-top bg-light">
@@ -4799,6 +4810,45 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
             return !!item && !isTanpaFoto(item) && !item.podFoto;
         }
 
+        // Link nomor shipment di modal daftar -> buka form edit (tgl kirim, driver, keterangan, dll).
+        function shipmentEditLink(item, warna, asalModal) {
+            const kode = encodeURIComponent(String(item.shipment));
+            return `<span class="clickable-shipment ${warna}" title="Klik untuk edit & isi keterangan" onclick="editDariModal('${asalModal}', decodeURIComponent('${kode}'))">${dbSafe(item.shipment)} <i class="fas fa-pen small"></i></span>`;
+        }
+
+        function ketBadge(item) {
+            return item.ket_belum_kembali
+                ? `<span class="small text-start d-inline-block" style="max-width:260px; white-space:pre-line;">${dbSafe(item.ket_belum_kembali)}</span>`
+                : `<span class="text-muted small">-</span>`;
+        }
+
+        let _editAsalModal = null;
+
+        // Tutup modal daftar dulu, buka form edit; setelah form ditutup/disimpan, daftar dibuka lagi.
+        function editDariModal(asalModal, shipmentVal) {
+            if (!(currentRole === 'admin' || currentRole === 'warehouse')) return;
+            const idx = transaksiData.findIndex(t => t.shipment === shipmentVal);
+            if (idx < 0) return;
+            const el = document.getElementById(asalModal);
+            _editAsalModal = asalModal;
+            el.addEventListener('hidden.bs.modal', function handler() {
+                el.removeEventListener('hidden.bs.modal', handler);
+                bukaModalEditLaporan(idx);
+            });
+            bootstrap.Modal.getOrCreateInstance(el).hide();
+        }
+
+        (function () {
+            const editEl = document.getElementById('modalEditLaporan');
+            if (!editEl) return;
+            editEl.addEventListener('hidden.bs.modal', function () {
+                const asal = _editAsalModal;
+                _editAsalModal = null;
+                if (asal === 'modalBelumKembali') bukaModalBelumKembali();
+                else if (asal === 'modalDalamPengantaran') bukaModalDalamPengantaran();
+            });
+        })();
+
         function bukaModalDalamPengantaran() {
             let tbody = document.getElementById('tabelModalDalamPengantaran');
             if (!tbody) return;
@@ -4807,19 +4857,20 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
             let dataDP = transaksiData.filter(isDalamPengantaran);
 
             if (dataDP.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="9" class="text-muted py-4">Tidak ada Surat Jalan dalam pengantaran. Semua bukti foto sudah di-upload driver.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="10" class="text-muted py-4">Tidak ada Surat Jalan dalam pengantaran. Semua bukti foto sudah di-upload driver.</td></tr>`;
             } else {
                 dataDP.forEach((item, idx) => {
                     tbody.innerHTML += `
                         <tr>
                             <td>${idx + 1}</td>
-                            <td class="fw-bold text-info">${item.shipment}</td>
+                            <td class="fw-bold">${shipmentEditLink(item, 'text-info', 'modalDalamPengantaran')}</td>
                             <td>${formatDateToDisplay(item.tgl_kirim)}</td>
-                            <td>${item.no_faktur || '-'}</td>
-                            <td>${item.nama_dealer || '-'}</td>
-                            <td>${item.expedisi || '-'}</td>
-                            <td>${item.driver || '-'}</td>
+                            <td>${dbSafe(item.no_faktur || '-')}</td>
+                            <td>${dbSafe(item.nama_dealer || '-')}</td>
+                            <td>${dbSafe(item.expedisi || '-')}</td>
+                            <td>${dbSafe(item.driver || '-')}</td>
                             <td><span class="badge bg-info text-dark">DALAM PENGANTARAN</span></td>
+                            <td>${ketBadge(item)}</td>
                             <td><button type="button" class="btn btn-sm btn-outline-primary fw-bold" onclick="detailDariDalamPengantaran('${String(item.shipment).replace(/'/g, "\\'")}')"><i class="fas fa-map-marked-alt me-1"></i>Detail</button></td>
                         </tr>
                     `;
@@ -4847,25 +4898,56 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
             let lumKembaliData = transaksiData.filter(i => !isDokOK(i));
 
             if (lumKembaliData.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="8" class="text-muted py-4">Semua Surat Jalan telah dikembalikan (Status: OK).</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="9" class="text-muted py-4">Semua Surat Jalan telah dikembalikan (Status: OK).</td></tr>`;
             } else {
                 lumKembaliData.forEach((item, idx) => {
                     tbody.innerHTML += `
                         <tr>
                             <td>${idx + 1}</td>
-                            <td class="fw-bold text-danger">${item.shipment}</td>
+                            <td class="fw-bold">${shipmentEditLink(item, 'text-danger', 'modalBelumKembali')}</td>
                             <td>${formatDateToDisplay(item.tgl_kirim)}</td>
-                            <td>${item.no_faktur || '-'}</td>
-                            <td>${item.nama_dealer || '-'}</td>
-                            <td>${item.expedisi || '-'}</td>
-                            <td>${item.driver || '-'}</td>
+                            <td>${dbSafe(item.no_faktur || '-')}</td>
+                            <td>${dbSafe(item.nama_dealer || '-')}</td>
+                            <td>${dbSafe(item.expedisi || '-')}</td>
+                            <td>${dbSafe(item.driver || '-')}</td>
                             <td><span class="badge bg-danger">BELUM KEMBALI</span></td>
+                            <td>${ketBadge(item)}</td>
                         </tr>
                     `;
                 });
             }
 
-            new bootstrap.Modal(document.getElementById('modalBelumKembali')).show();
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('modalBelumKembali')).show();
+        }
+
+        function eksporDaftarSJ(list, namaSheet, prefixFile, statusText) {
+            if (!list.length) { alert("Tidak ada data untuk diekspor!"); return; }
+            const data = list.map((x, i) => ({
+                "No": i + 1,
+                "No. Shipment / SJ": String(x.shipment || "").toUpperCase(),
+                "Dokumen": x.jenis_dokumen || "SJ",
+                "Tgl Kirim": formatDateToDisplay(x.tgl_kirim),
+                "Nomor Faktur": x.no_faktur || "",
+                "Customer": x.nama_dealer || "",
+                "Ekspedisi": x.expedisi || "",
+                "Driver": x.driver || "",
+                "Plat": x.plat || "",
+                "Race": x.race || "",
+                "Koli": x.total || 0,
+                "Status": statusText,
+                "Keterangan": x.ket_belum_kembali || ""
+            }));
+            const ws = XLSX.utils.json_to_sheet(data), wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, namaSheet);
+            XLSX.writeFile(wb, `${prefixFile}_${getTanggalHariIniLocal()}.xlsx`);
+        }
+
+        function eksporBelumKembali() {
+            eksporDaftarSJ(transaksiData.filter(i => !isDokOK(i)), "Belum Kembali", "Surat_Jalan_Belum_Kembali", "BELUM KEMBALI");
+        }
+
+        function eksporDalamPengantaran() {
+            eksporDaftarSJ(transaksiData.filter(isDalamPengantaran), "Dalam Pengantaran", "Surat_Jalan_Dalam_Pengantaran", "DALAM PENGANTARAN");
         }
 
 
@@ -6244,19 +6326,43 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
             muatDBGISOViewer();
         }
 
-        function muatDataOSGISO() {
-            const tbody=document.getElementById("tabelOSGISO");
-            if(!tbody)return;
-
+        // Daftar OS GI SO sesuai pencarian & filter Tanggal GI. Dipakai tabel dan ekspor.
+        function getDaftarOSGISO() {
             const q=dbText(document.getElementById("searchGISO")?.value).toLowerCase();
             const start=document.getElementById("gisoStart")?.value||"";
             const end=document.getElementById("gisoEnd")?.value||"";
 
-            let data=Object.keys(databaseGISO).map(k=>({_key:k,...databaseGISO[k]})).filter(x=>{
+            return Object.keys(databaseGISO).map(k=>({_key:k,...databaseGISO[k]})).filter(x=>{
                 const blob=JSON.stringify(x).toLowerCase();
                 const d=cleanDateOnly(x.tgl_gi||getUploadedDate(x));
                 return (!q||blob.includes(q))&&inDateRange(d,start,end);
             });
+        }
+
+        function eksporOSGISO() {
+            const list=getDaftarOSGISO();
+            if(!list.length){alert("Tidak ada data OS GI SO untuk diekspor pada filter ini!");return;}
+            const start=document.getElementById("gisoStart")?.value||"";
+            const end=document.getElementById("gisoEnd")?.value||"";
+            const data=list.map((x,i)=>({
+                "No":i+1,
+                "No. Delivery":x.no_delivery||x._key,
+                "No. Shipment":x.shipment||"",
+                "Kode BA":x.kode_ba||"",
+                "Tanggal GI":formatDateToDisplay(x.tgl_gi||getUploadedDate(x)),
+                "Status Bukti Tanda Terima":(x.bukti||x.podFoto)?"Sudah Ada":"Belum Ada"
+            }));
+            const ws=XLSX.utils.json_to_sheet(data), wb=XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb,ws,"OS GI SO");
+            const rentang=(start||end)?`_${start||"awal"}_sd_${end||"akhir"}`:`_${getTanggalHariIniLocal()}`;
+            XLSX.writeFile(wb,`OS_GI_SO${rentang}.xlsx`);
+        }
+
+        function muatDataOSGISO() {
+            const tbody=document.getElementById("tabelOSGISO");
+            if(!tbody)return;
+
+            let data=getDaftarOSGISO();
 
             const pageStart=(currentPageGISO-1)*rowsPerPage;
             const page=data.slice(pageStart,pageStart+rowsPerPage);
@@ -6373,7 +6479,8 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
                 "Driver":x.driver||"",
                 Race:x.race||"",
                 "Lead Time":hitungLeadTimeLive(x),
-                KET:isDokOK(x)?"OK":"BELUM KEMBALI"
+                KET:isDokOK(x)?"OK":"BELUM KEMBALI",
+                "Keterangan Belum Kembali":x.ket_belum_kembali||""
             }));
             if(!data.length){alert("Tidak ada data laporan untuk diekspor!");return;}
             const ws=XLSX.utils.json_to_sheet(data), wb=XLSX.utils.book_new();
@@ -7243,7 +7350,8 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
             document.getElementById('editRace').value = item.race;
             document.getElementById('editIsiBarang').value = item.isi_barang || '';
             document.getElementById('editStatus').value = item.status;
-            new bootstrap.Modal(document.getElementById('modalEditLaporan')).show();
+            document.getElementById('editKeterangan').value = item.ket_belum_kembali || '';
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('modalEditLaporan')).show();
         }
 
         function simpanPerubahanLaporan() {
@@ -7266,6 +7374,7 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
             item.tanpa_foto = !tetapBaru || isSPRangka(item);
             item.race = document.getElementById('editRace').value;
             item.isi_barang = document.getElementById('editIsiBarang').value.trim();
+            item.ket_belum_kembali = document.getElementById('editKeterangan').value.trim();
             
             let statusBaru = document.getElementById('editStatus').value;
             if (item.status !== 'OK' && statusBaru === 'OK') {
@@ -7538,11 +7647,8 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
             muatTabelDriverPOD();
         }
 
-        function muatDataOutstanding() {
-            let tbodyOut = document.getElementById('tabelOutstanding');
-            if (!tbodyOut) return;
-            tbodyOut.innerHTML = "";
-
+        // Daftar outstanding sesuai filter tanggal (Created On) & pencarian. Dipakai tabel dan ekspor.
+        function getDaftarOutstanding() {
             let searchVal = document.getElementById('searchOut') ? document.getElementById('searchOut').value.toLowerCase() : "";
             let startVal = document.getElementById('outStart') ? document.getElementById('outStart').value : "";
             let endVal = document.getElementById('outEnd') ? document.getElementById('outEnd').value : "";
@@ -7575,6 +7681,37 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
                     }
                 }
             }
+            return outstandingList;
+        }
+
+        function eksporOutstanding() {
+            const list = getDaftarOutstanding();
+            if (!list.length) { alert("Tidak ada data Outstanding untuk diekspor pada filter ini!"); return; }
+            const start = document.getElementById('outStart') ? document.getElementById('outStart').value : "";
+            const end = document.getElementById('outEnd') ? document.getElementById('outEnd').value : "";
+            const data = list.map((d, i) => ({
+                "No": i + 1,
+                "Tanggal Created On (SJ)": formatDateToDisplay(d.tgl_created_on),
+                "Shipment (No SJ)": d.shipment,
+                "Nama Customer": d.nama_customer || "",
+                "Ekspedisi": d.ekspedisi || "",
+                "Jenis": d.jenis_kemasan || "",
+                "Koli": d.jumlah_koli || 0,
+                "Nomor Faktur": d.billing || "",
+                "Lead Time (Hari Ini)": d.leadTimeOut
+            }));
+            const ws = XLSX.utils.json_to_sheet(data), wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Outstanding");
+            const rentang = (start || end) ? `_${start || "awal"}_sd_${end || "akhir"}` : `_${getTanggalHariIniLocal()}`;
+            XLSX.writeFile(wb, `Outstanding${rentang}.xlsx`);
+        }
+
+        function muatDataOutstanding() {
+            let tbodyOut = document.getElementById('tabelOutstanding');
+            if (!tbodyOut) return;
+            tbodyOut.innerHTML = "";
+
+            let outstandingList = getDaftarOutstanding();
 
             let startIndex = (currentPageOut - 1) * rowsPerPage;
             let endIndex = startIndex + rowsPerPage;
