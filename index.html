@@ -816,7 +816,7 @@
                         <i class="fas fa-undo-alt"></i><span>Pengembalian SJ</span>
                     </button>
                 </li>
-                <li class="nav-item role-menu wh-access admin-only" role="presentation">
+                <li class="nav-item role-menu wh-access admin-only sps-access" role="presentation">
                     <button class="nav-link w-100 text-start" data-bs-toggle="pill" data-bs-target="#menu-outstanding" type="button" role="tab" onclick="muatDataOutstanding()">
                         <i class="fas fa-exclamation-triangle"></i><span>Outstanding <span class="badge bg-danger ms-1" id="badgeOutstanding">0</span></span>
                     </button>
@@ -866,12 +866,12 @@
                         <i class="fas fa-database"></i><span>DB GI SO Viewer</span>
                     </button>
                 </li>
-                <li class="nav-item role-menu wh-access admin-only" role="presentation">
+                <li class="nav-item role-menu wh-access admin-only sps-access" role="presentation">
                     <button class="nav-link w-100 text-start" data-bs-toggle="pill" data-bs-target="#menu-dashboard" type="button" role="tab" onclick="initDashboardCharts()">
                         <i class="fas fa-chart-line"></i><span>Dashboard & Grafik</span>
                     </button>
                 </li>
-                <li class="nav-item role-menu sp-access wh-access admin-only" role="presentation">
+                <li class="nav-item role-menu sp-access wh-access admin-only sps-access" role="presentation">
                     <button class="nav-link w-100 text-start" data-bs-toggle="pill" data-bs-target="#menu-laporan-bulanan" type="button" role="tab" onclick="muatLaporanBulanan()">
                         <i class="fas fa-calendar-check"></i><span>Laporan Bulanan</span>
                     </button>
@@ -1325,7 +1325,7 @@
                                             <th>Jenis</th>
                                             <th>Koli</th>
                                             <th>Nomor Faktur</th>
-                                            <th>Lead Time (Hari Ini)</th>
+                                            <th class="kolom-lead">Lead Time (Hari Ini)</th>
                                         </tr>
                                     </thead>
                                     <tbody id="tabelOutstanding"></tbody>
@@ -1689,7 +1689,7 @@
                         <div class="card-header bg-white text-dark py-3 d-flex justify-content-between align-items-center border-bottom flex-wrap gap-2">
                             <h5 class="mb-0 fw-bold"><i class="fas fa-chart-line text-primary me-2"></i>Dashboard Analisis Pengiriman</h5>
                             <div class="d-flex gap-2 align-items-center flex-wrap">
-                                <button class="btn btn-info btn-sm fw-bold text-white shadow-sm" onclick="bukaAnalisaAI()"><i class="fas fa-robot me-1"></i> Analisa AI (Outstanding &ge; 3 Hari)</button>
+                                <button class="btn btn-info btn-sm fw-bold text-white shadow-sm ai-fitur" onclick="bukaAnalisaAI()"><i class="fas fa-robot me-1"></i> Analisa AI (Outstanding &ge; 3 Hari)</button>
                                 <input type="date" id="filterStart" class="form-control form-control-sm">
                                 <span class="small text-muted">-</span>
                                 <input type="date" id="filterEnd" class="form-control form-control-sm">
@@ -1714,7 +1714,7 @@
                             <h5 class="mb-0 fw-bold"><i class="fas fa-calendar-check text-primary me-2"></i>Laporan Bulanan Pengiriman</h5>
                             <div class="d-flex gap-2 align-items-center flex-wrap">
                                 <input type="month" id="lapBulan" class="form-control form-control-sm" style="width:160px;" onchange="muatLaporanBulanan()">
-                                <button id="btnAnalisaAI" class="btn btn-info btn-sm fw-bold text-white shadow-sm" onclick="analisaLaporanBulanan()" ><i class="fas fa-robot me-1"></i> Analisa AI</button>
+                                <button id="btnAnalisaAI" class="btn btn-info btn-sm fw-bold text-white shadow-sm ai-fitur" onclick="analisaLaporanBulanan()" ><i class="fas fa-robot me-1"></i> Analisa AI</button>
                                 <button class="btn btn-success btn-sm fw-bold shadow-sm" onclick="eksporLaporanBulanan()"><i class="fas fa-file-excel me-1"></i> Ekspor Excel</button>
                             </div>
                         </div>
@@ -4499,6 +4499,8 @@ window.demoBoot = async function () {
             driverEls.forEach(el => el.style.display = 'none');
             adminDealerEls.forEach(el => el.style.display = 'none');
             document.querySelectorAll('.report-access').forEach(el => el.style.display = 'none');
+            document.querySelectorAll('.ai-fitur').forEach(el => el.style.display = '');
+            document.querySelectorAll('.kolom-lead').forEach(el => el.style.display = '');
 
             if (currentRole === 'admin') {
                 document.getElementById('userRoleBadge').innerText = `Admin Gudang • ${currentUsername || 'User'}`;
@@ -4531,7 +4533,11 @@ window.demoBoot = async function () {
                 const label = currentRole === 'sparepart' ? 'Sparepart' : 'Salesman Part';
                 document.getElementById('userRoleBadge').innerText = `${label} • ${currentUsername || 'User'}`;
                 document.querySelectorAll('.report-access').forEach(el => el.style.display = 'block');
-                if (currentRole === 'sparepart') { const b = document.getElementById('btnAnalisaAI'); if (b) b.style.display = 'none'; }
+                // Sparepart & Salesman Part: boleh lihat Dashboard & Laporan Bulanan, tapi TANPA Analisa AI
+                document.querySelectorAll('.sps-access').forEach(el => el.style.display = 'block');
+                document.querySelectorAll('.ai-fitur').forEach(el => el.style.display = 'none');
+                document.querySelectorAll('.kolom-lead').forEach(el => el.style.display = 'none');
+                try { muatDataOutstanding(); } catch (e) {}   // isi angka badge Outstanding di menu
                 if (currentRole === 'sparepart') document.querySelectorAll('.sp-access').forEach(el => el.style.display = 'block');
                 if (currentRole === 'salespart') document.querySelectorAll('.sales-status').forEach(el => el.style.display = 'block');
                 aktifkanTabAwal('#menu-laporan');
@@ -5861,6 +5867,7 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
         }
 
         function resetDBDealer() {
+            if (currentRole === 'sparepart' || currentRole === 'salespart') { alert('Fitur ini hanya untuk Admin.'); return; }
             if (!databaseDealerListRaw.length && !Object.keys(databaseDealerEkspedisi).length) {
                 alert("DB Dealer & Ekspedisi sudah kosong.");
                 return;
@@ -5875,6 +5882,7 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
         }
 
         async function resetSemuaData() {
+            if (currentRole === 'sparepart' || currentRole === 'salespart') { alert('Fitur ini hanya untuk Admin.'); return; }
             if (!confirm(
                 "RESET SEMUA DATA SISTEM?\n\n" +
                 "Semua database upload, laporan pengiriman, POD, pengembalian, statistik, session dan konfigurasi GPS akan dihapus dari browser DAN dari server (berlaku untuk semua pengguna).\n\n" +
@@ -6214,6 +6222,7 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
         }
 
         function hapusDBSPSesuaiFilter() {
+            if (currentRole === 'sparepart' || currentRole === 'salespart') { alert('Fitur ini hanya untuk Admin.'); return; }
             if (currentRole !== "admin") { alert("Fitur ini hanya untuk admin."); return; }
             const start = document.getElementById("spFilterStart")?.value || "";
             const end = document.getElementById("spFilterEnd")?.value || "";
@@ -6491,6 +6500,7 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
         }
 
         function bukaAnalisaAI() {
+            if (currentRole === 'sparepart' || currentRole === 'salespart') return;
             const tbody=document.getElementById("tabelAnalisaAI");
             if(!tbody)return;
             const today=cleanDateOnly(new Date());
@@ -6620,6 +6630,13 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
                 if (info.area) return areaSaya.has(info.area);
                 return info.sales === saya;                   // ada nama sales tapi tanpa area -> hanya sales itu
             };
+        }
+
+        // Data transaksi sesuai role: Salesman Part hanya melihat dealer di areanya
+        function transaksiUntukRole() {
+            if (currentRole !== 'salespart') return transaksiData;
+            const _fs = buatFilterSalesman();
+            return _fs ? transaksiData.filter(_fs) : transaksiData;
         }
 
         function getFilteredTransaksi() {
@@ -6875,6 +6892,7 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
 
         // Hapus SELURUH Status Pesanan. Dihapus per blok id supaya tidak kena batas waktu server.
         async function hapusSemuaStatusPesanan() {
+            if (currentRole === 'sparepart' || currentRole === 'salespart') { alert('Fitur ini hanya untuk Admin.'); return; }
             if (currentRole !== "admin") { alert("Fitur ini hanya untuk admin."); return; }
             let total = 0;
             try {
@@ -6923,6 +6941,7 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
         }
 
         async function hapusStatusPesananByTanggal() {
+            if (currentRole === 'sparepart' || currentRole === 'salespart') { alert('Fitur ini hanya untuk Admin.'); return; }
             if (currentRole !== "admin") { alert("Fitur ini hanya untuk admin."); return; }
             const start = document.getElementById("spHapusStart").value;
             const end = document.getElementById("spHapusEnd").value;
@@ -7657,6 +7676,7 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
 
             let outstandingList = [];
             let todayDateObj = new Date();
+            const _fsOut = currentRole === 'salespart' ? buatFilterSalesman() : null;   // Salesman Part: hanya dealer di areanya
 
             for (let k in databaseMaster) {
                 if (!shipmentTerinput.includes(k)) {
@@ -7669,6 +7689,8 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
 
                     if (startVal && cleanCreatedOn < startVal) continue;
                     if (endVal && cleanCreatedOn > endVal) continue;
+
+                    if (_fsOut && !_fsOut({ no_customer: getDealerMasterFields(item).customerNo, nama_dealer: item.nama_customer })) continue;
 
                     let leadTimeOut = 0;
                     if (cleanCreatedOn && cleanToday && cleanCreatedOn !== "undefined" && cleanCreatedOn !== "null") {
@@ -7701,7 +7723,7 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
                 "Koli": d.jumlah_koli || 0,
                 "Nomor Faktur": d.billing || "",
                 "Lead Time (Hari Ini)": d.leadTimeOut
-            }));
+            })).map(r => { if (currentRole === 'sparepart' || currentRole === 'salespart') delete r["Lead Time (Hari Ini)"]; return r; });
             const ws = XLSX.utils.json_to_sheet(data), wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, "Outstanding");
             const rentang = (start || end) ? `_${start || "awal"}_sd_${end || "akhir"}` : `_${getTanggalHariIniLocal()}`;
@@ -7714,6 +7736,7 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
             tbodyOut.innerHTML = "";
 
             let outstandingList = getDaftarOutstanding();
+            const sembunyiLead = currentRole === 'sparepart' || currentRole === 'salespart';
 
             let startIndex = (currentPageOut - 1) * rowsPerPage;
             let endIndex = startIndex + rowsPerPage;
@@ -7728,11 +7751,11 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
                         <td>${d.jenis_kemasan || '-'}</td>
                         <td>${d.jumlah_koli || 0}</td>
                         <td class="text-success">${d.billing || '-'}</td>
-                        <td><span class="badge bg-warning text-dark">${d.leadTimeOut} Hari</span></td>
+                        ${sembunyiLead ? '' : `<td><span class="badge bg-warning text-dark">${d.leadTimeOut} Hari</span></td>`}
                     </tr>`;
             });
 
-            if (outstandingList.length === 0) tbodyOut.innerHTML = `<tr><td colspan="7" class="text-muted py-3">Tidak ada outstanding.</td></tr>`;
+            if (outstandingList.length === 0) tbodyOut.innerHTML = `<tr><td colspan="${sembunyiLead ? 6 : 7}" class="text-muted py-3">Tidak ada outstanding.</td></tr>`;
             document.getElementById('badgeOutstanding').innerText = outstandingList.length;
             renderPaginationOut(outstandingList.length);
         }
@@ -7816,6 +7839,7 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
         // Memakai tanggal awal & akhir di header Laporan Pengiriman (berdasarkan Tgl Kirim).
         // ============================================================
         function hapusLaporanByTanggal() {
+            if (currentRole === 'sparepart' || currentRole === 'salespart') { alert('Fitur ini hanya untuk Admin.'); return; }
             if (currentRole !== "admin") { alert("Fitur ini hanya untuk admin."); return; }
             const start = document.getElementById("exportStart").value;
             const end = document.getElementById("exportEnd").value;
@@ -8100,6 +8124,7 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
         }
 
         function resetDBSP() {
+            if (currentRole === 'sparepart' || currentRole === 'salespart') { alert('Fitur ini hanya untuk Admin.'); return; }
             if (!Object.keys(databaseSP).length) { alert('DB SP sudah kosong.'); return; }
             if (!confirm('Kosongkan seluruh DB Surat Pengantar (SP)?')) return;
             databaseSP = {};
@@ -8616,7 +8641,7 @@ if (_sudahAda) {
             LAP_ARMADA.forEach(n => M.armada[n] = lapBucket());
             LAP_KATEGORI.forEach(n => M.kemasan[n] = { sj: 0, koli: 0 });
 
-            transaksiData.forEach(item => {
+            transaksiUntukRole().forEach(item => {
                 const tgl = cleanDateOnly(item.tgl_kirim || item.tgl_kirim_raw);
                 if (!tgl || tgl.slice(0, 7) !== ym) return;
                 const koli = parseInt(item.total) || 0;
@@ -8659,7 +8684,7 @@ if (_sudahAda) {
             lapCache = { C, P, ym, pym };
             const bn = lapNamaBulan(ym), pn = lapNamaBulan(pym);
 
-            document.getElementById('lapInfo').innerHTML = `Periode <b>${bn}</b> dibandingkan dengan <b>${pn}</b>. ${currentRole === 'sparepart' ? '' : 'Klik <b>Analisa AI</b> untuk ringkasan pencapaian otomatis.'}`;
+            document.getElementById('lapInfo').innerHTML = `Periode <b>${bn}</b> dibandingkan dengan <b>${pn}</b>. ${(currentRole === 'sparepart' || currentRole === 'salespart') ? '' : 'Klik <b>Analisa AI</b> untuk ringkasan pencapaian otomatis.'}`;
             document.getElementById('lapAI').innerHTML = '';
 
             // KPI
@@ -8844,7 +8869,7 @@ if (_sudahAda) {
         }
 
         function analisaLaporanBulanan() {
-            if (currentRole === 'sparepart') return;
+            if (currentRole === 'sparepart' || currentRole === 'salespart') return;
             if (!lapCache) muatLaporanBulanan();
             const { C, P, ym, pym } = lapCache;
             const A = lapBuatAnalisa(C, P, ym, pym);
@@ -8904,9 +8929,11 @@ if (_sudahAda) {
             add('Harian', H.rows.map(r => barisH(formatDateToDisplay(r.tgl), r, false)).concat(H.rows.length ? [barisH('TOTAL / RATA-RATA', H.T, true)] : []));
             add('Detail SJ', C.rows);
 
+            if (!(currentRole === 'sparepart' || currentRole === 'salespart')) {
             const A = lapBuatAnalisa(C, P, ym, pym);
             add('Analisa AI', [{ 'Bagian': 'Kesimpulan', 'Isi': A.verdict + (A.skor === null ? '' : ` (skor ${A.skor}/${A.maks})`) }]
                 .concat(A.items.map(it => ({ 'Bagian': it.judul, 'Isi': it.teks }))));
+            }
 
             XLSX.writeFile(wb, `Laporan_Bulanan_${ym}.xlsx`);
         }
@@ -9038,7 +9065,7 @@ if (_sudahAda) {
             });
             const dalamRentang = tgl => tgl && (!start || tgl >= start) && (!end || tgl <= end);
 
-            transaksiData.forEach(item => {
+            transaksiUntukRole().forEach(item => {
                 const tgl = cleanDateOnly(item.tgl_kirim || item.tgl_kirim_raw);
                 if (!dalamRentang(tgl)) return;
                 const r = ambil(tgl);
@@ -9061,10 +9088,12 @@ if (_sudahAda) {
             });
 
             // Tanggal yang hanya punya data outstanding tetap ditampilkan.
+            if (currentRole !== 'salespart') {
             Object.keys(outstandingHarian).forEach(tgl => { if (dalamRentang(tgl)) ambil(tgl); });
             Object.keys(map).forEach(tgl => {
                 if (Object.prototype.hasOwnProperty.call(outstandingHarian, tgl)) map[tgl].outstanding = outstandingHarian[tgl];
             });
+            }
 
             const rows = Object.keys(map).sort().map(k => map[k]);
             const T = { sj: 0, oli: 0, ban: 0, part: 0, ds: 0, lain: 0, sp: 0, leadSum: 0, leadN: 0, race: { [LAP_ARMADA[0]]: 0, [LAP_ARMADA[1]]: 0, [LAP_ARMADA[2]]: 0 }, outstandingTerakhir: null, tglOutstanding: '' };
@@ -9184,7 +9213,7 @@ if (_sudahAda) {
 
             // ---- Kelompokkan per tanggal kirim ----
             const perHari = {};
-            transaksiData.forEach(item => {
+            transaksiUntukRole().forEach(item => {
                 const tgl = cleanDateOnly(item.tgl_kirim || item.tgl_kirim_raw);
                 if (!tgl || tgl < startDate || tgl > endDate) return;
                 if (!perHari[tgl]) perHari[tgl] = { koli: 0, totalLead: 0, count: 0 };
