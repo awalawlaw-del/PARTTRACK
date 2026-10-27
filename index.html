@@ -1345,7 +1345,7 @@
                                     </div>
                                     <div class="est-mobil em-total" title="Total koli seluruh outstanding yang tampil">
                                         <i class="fas fa-boxes-stacked em-ico"></i>
-                                        <div><div class="em-label">Total Koli</div><div class="em-detail">semua kategori</div></div>
+                                        <div><div class="em-label">Total Koli</div><div class="em-detail">&asymp; <b id="estMobilTotal">0</b> mobil (gabungan)</div></div>
                                         <div class="em-num"><span id="estTotalKoli">0</span></div>
                                     </div>
                                 </div>
@@ -7792,12 +7792,21 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
                 const kat = lapKategoriKemasan(d);   // DO -> Oli, IK -> Ban, selain itu (DS/Koli/SP/dll) -> Sparepart
                 if (kat === 'Dus Oli') tot.Oli += jml; else if (kat === 'Dus Ban') tot.Ban += jml; else tot.Part += jml;
             });
+            // Total mobil: pecahan tiap kategori dijumlahkan dulu (muatan campur satu mobil), baru dibulatkan ke atas
+            const elMobilTot = document.getElementById('estMobilTotal');
+            if (elMobilTot) {
+                const jumlahPecahan = Object.keys(tot).reduce((a, k) => a + tot[k] / EST_MOBIL_KAPASITAS[k], 0);
+                elMobilTot.innerText = Math.ceil(jumlahPecahan - 1e-9);
+            }
             const elTot = document.getElementById('estTotalKoli');
             if (elTot) elTot.innerText = (tot.Part + tot.Oli + tot.Ban).toLocaleString('id-ID');
             Object.keys(tot).forEach(k => {
                 const q = document.getElementById('estQty' + k), m = document.getElementById('estMobil' + k);
                 if (q) q.innerText = tot[k].toLocaleString('id-ID');
-                if (m) m.innerText = Math.ceil(tot[k] / EST_MOBIL_KAPASITAS[k]);
+                if (m) {
+                    const v = tot[k] / EST_MOBIL_KAPASITAS[k];
+                    m.innerText = tot[k] === 0 ? '0' : (v < 0.1 ? '<0,1' : v.toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 }));
+                }
             });
         }
 
