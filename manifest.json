@@ -1,11 +1,11 @@
 {
-  "name": "PartTrack WH KIMA",
-  "short_name": "PartTrack",
-  "description": "Enterprise Warehouse & Logistics Monitoring System",
+  "name": "MOVA-Z",
+  "short_name": "MOVA-Z",
+  "description": "MOVA-Z - One Platform, Total Control",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#fafbfb",
+  "background_color": "#040713",
   "theme_color": "#0f172a",
   "icons": [
     {

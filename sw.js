@@ -1,8 +1,8 @@
-// PartTrack service worker (versi dasar untuk PWA)
+// MOVA-Z service worker (versi dasar untuk PWA)
 // Strategi: jaringan dulu, cache hanya sebagai cadangan saat offline.
 // Data Supabase / CDN (beda domain) tidak pernah di-cache, jadi data selalu segar.
-const CACHE = 'parttrack-v1';
-const ASET = ['./', './index.html', './manifest.json', './logo.png'];
+const CACHE = 'mova-z-v2';
+const ASET = ['./', './index.html', './manifest.json', './logo.png', './logo-loading.png', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASET)).catch(() => {}));
