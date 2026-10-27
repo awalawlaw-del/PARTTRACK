@@ -1,16 +1,16 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-    <link rel="icon" type="image/png" href="logo.png">
+    <link rel="icon" type="image/png" href="icon-192.png?v=2">
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#0f172a">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-title" content="PartTrack">
-    <link rel="apple-touch-icon" href="icon-192.png">
+    <meta name="apple-mobile-web-app-title" content="MOVA-Z">
+    <link rel="apple-touch-icon" href="icon-192.png?v=2">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Enterprise Warehouse & Logistics Monitoring System</title>
+    <title>MOVA-Z</title>
     <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- FontAwesome untuk Icon Modern -->
@@ -574,13 +574,15 @@
         #loginWrapper .btn-primary { background:linear-gradient(135deg,#6d83f2,#4361ee); border:0; border-radius:14px; box-shadow:0 10px 22px rgba(67,97,238,.28); transition:transform .2s, box-shadow .2s, opacity .2s; }
         #loginWrapper .btn-primary:hover:not(:disabled) { transform:translateY(-1px); box-shadow:0 14px 28px rgba(67,97,238,.34); }
         #loginWrapper .btn-primary:disabled { opacity:.85; cursor:progress; }
-        #bootSplash { display:none; position:fixed; inset:0; z-index:99998; align-items:center; justify-content:center; flex-direction:column; gap:18px; background:linear-gradient(135deg,#eef2ff 0%,#f5f3ff 45%,#fff7ed 100%); color:#475569; }
+        #bootSplash { display:none; position:fixed; inset:0; z-index:99998; align-items:center; justify-content:center; flex-direction:column; gap:10px; background:#040713; color:#94a3b8; }
         #bootSplash.show { display:flex; animation:splashIn .25s ease both; }
         @keyframes splashIn { from { opacity:0; } to { opacity:1; } }
-        #bootSplash img { width:170px; max-width:60vw; }
-        #bootSplash .ring { width:46px; height:46px; border-radius:50%; border:4px solid #dfe5fb; border-top-color:#4361ee; animation:ringSpin .8s linear infinite; }
-        @keyframes ringSpin { to { transform:rotate(360deg); } }
-        #bootSplash .txt { font-weight:600; font-size:.95rem; letter-spacing:.2px; }
+        #bootSplash img { width:min(440px, 86vw); height:auto; animation:logoPulse 2s ease-in-out infinite; }
+        @keyframes logoPulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:.82; transform:scale(.985); } }
+        #bootSplash .bar { width:160px; height:4px; border-radius:99px; background:rgba(255,255,255,.12); overflow:hidden; position:relative; margin-top:6px; }
+        #bootSplash .bar::after { content:""; position:absolute; top:0; left:0; height:100%; width:40%; border-radius:99px; background:linear-gradient(90deg,#22d3ee,#6d83f2,#a78bfa); animation:barMove 1.1s ease-in-out infinite; }
+        @keyframes barMove { 0% { left:-40%; } 100% { left:100%; } }
+        #bootSplash .txt { font-weight:600; font-size:.92rem; letter-spacing:.4px; color:#9fb0cf; }
 
         /* ===== FREEZE JUDUL KOLOM TABEL (tetap terlihat saat di-scroll) ===== */
         .table-responsive {
@@ -653,7 +655,7 @@
 <body>
 
     <!-- LAYAR LOADING (setelah klik Login & saat memuat data) -->
-    <div id="bootSplash"><img src="logo.png" alt="PartTrack"><div class="ring"></div><div class="txt" id="bootSplashText">Menyiapkan data...</div></div>
+    <div id="bootSplash"><img src="logo-loading.png?v=2" alt="MOVA-Z"><div class="bar"></div><div class="txt" id="bootSplashText">Menyiapkan data...</div></div>
     <script>
         function tampilSplash(t) { var e = document.getElementById('bootSplash'); if (!e) return; if (t) document.getElementById('bootSplashText').textContent = t; e.classList.add('show'); }
         function sembunyiSplash() { var e = document.getElementById('bootSplash'); if (e) e.classList.remove('show'); }
@@ -668,8 +670,8 @@
         <div class="login-orb orb-1"></div><div class="login-orb orb-2"></div>
         <div class="card shadow-lg p-4 p-md-5" style="width: 460px; max-width: 100%; border-radius: 20px;">
 <div class="text-center mb-4">
-    <img src="logo.png" alt="PartTrack" class="mb-2" style="width:220px; max-width:100%; height:auto;">
-    <h4 class="fw-bold text-dark auth-title mb-1">PART TRACK WH KIMA</h4>
+    <img src="logo.png?v=2" alt="MOVA-Z" class="mb-2" style="width:220px; max-width:100%; height:auto;">
+    <h4 class="fw-bold text-dark auth-title mb-1">MOVA-Z</h4>
     <p class="text-muted small mb-0">Akses laporan pengiriman secara aman sesuai akun Anda</p>
 </div>
 
@@ -775,8 +777,8 @@
         <!-- TOP BAR & BACKDROP (HP) -->
         <div id="mobileBar">
             <button type="button" class="mb-burger" onclick="toggleSidebar()" aria-label="Menu"><i class="fas fa-bars"></i></button>
-            <div class="mb-logo"><img src="logo.png" alt="PartTrack"></div>
-            <div class="mb-title">PartTrack</div>
+            <div class="mb-logo"><img src="logo.png?v=2" alt="MOVA-Z"></div>
+            <div class="mb-title">MOVA-Z</div>
         </div>
         <div id="sidebarBackdrop" onclick="closeSidebar()"></div>
 
@@ -784,7 +786,7 @@
         <div id="sidebar" class="d-flex flex-column">
 <div class="sidebar-header d-flex align-items-center justify-content-between">
     <div class="bg-white rounded-3 p-1 w-100 text-center">
-        <img src="logo.png" alt="PartTrack" style="height:64px; max-width:100%; object-fit:contain;">
+        <img src="logo.png?v=2" alt="MOVA-Z" style="height:64px; max-width:100%; object-fit:contain;">
     </div>
 </div>
 <ul class="nav flex-column flex-grow-1 pt-3 px-2" id="sidebarMenu" role="tablist">
@@ -2327,7 +2329,7 @@
     window.DEMO_MODE = on;
     if (!on) return;
 
-    document.title = 'PARTTRACK (DEMO)';
+    document.title = 'MOVA-Z (DEMO)';
 
     /* ---------- 1) localStorage -> memori (aman: tidak menimpa sesi/data asli di browser) ---------- */
     var mem = new Map();
@@ -2730,7 +2732,7 @@
         document.body.classList.add('demo-picking');
         var el = document.createElement('div');
         el.id = 'demoPicker';
-        el.innerHTML = '<div class="dp-wrap"><h1>PARTTRACK &mdash; Mode Demo</h1>' +
+        el.innerHTML = '<div class="dp-wrap"><h1>MOVA-Z &mdash; Mode Demo</h1>' +
             '<div class="dp-sub">Pilih role untuk melihat tampilan dan fitur aplikasi. Tidak perlu login.</div>' +
             '<div class="dp-note"><i class="fas fa-flask me-1"></i> Semua data di sini hanya CONTOH (bukan data asli). Perubahan tidak tersimpan dan hilang saat halaman di-refresh.</div>' +
             '<div class="dp-grid">' + ROLES.map(function (r) {
@@ -4313,8 +4315,8 @@ window.demoBoot = async function () {
 
             if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
                 try {
-                    const n0 = baru.length > 3 ? { title: `${baru.length} pemberitahuan baru`, text: 'Buka PartTrack untuk melihat detailnya.' } : baru[0];
-                    const nt = new Notification(n0.title, { body: n0.text, tag: 'parttrack-notif', icon: 'logo.png' });
+                    const n0 = baru.length > 3 ? { title: `${baru.length} pemberitahuan baru`, text: 'Buka MOVA-Z untuk melihat detailnya.' } : baru[0];
+                    const nt = new Notification(n0.title, { body: n0.text, tag: 'parttrack-notif', icon: 'icon-192.png?v=2' });
                     nt.onclick = () => { window.focus(); try { bukaInbox(); } catch (e) {} nt.close(); };
                 } catch (e) {}
             }
