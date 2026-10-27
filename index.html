@@ -1331,9 +1331,9 @@
                                     <tbody id="tabelOutstanding"></tbody>
                                 </table>
                             </div>
-                            <div class="d-flex justify-content-between align-items-center mt-3">
+                            <div class="d-flex justify-content-between align-items-center mt-3 flex-wrap gap-2">
                                 <span class="text-muted small" id="paginationInfoOut">Menampilkan 0 - 0 dari 0 data</span>
-                                <nav><ul class="pagination pagination-sm mb-0" id="paginationNavOut"></ul></nav>
+                                <nav style="max-width:100%;"><ul class="pagination pagination-sm mb-0 flex-wrap justify-content-center" id="paginationNavOut"></ul></nav>
                             </div>
                         </div>
                     </div>
@@ -7737,6 +7737,7 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
 
             let outstandingList = getDaftarOutstanding();
             const sembunyiLead = currentRole === 'sparepart' || currentRole === 'salespart';
+            { const _tp = Math.ceil(outstandingList.length / rowsPerPage) || 1; if (currentPageOut > _tp) currentPageOut = _tp; }
 
             let startIndex = (currentPageOut - 1) * rowsPerPage;
             let endIndex = startIndex + rowsPerPage;
@@ -7762,6 +7763,7 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
 
         function renderPaginationOut(totalData) {
             let totalPages = Math.ceil(totalData / rowsPerPage) || 1;
+            if (currentPageOut > totalPages) currentPageOut = totalPages;
             let nav = document.getElementById('paginationNavOut');
             let info = document.getElementById('paginationInfoOut');
             if (!nav || !info) return;
@@ -7770,15 +7772,28 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
             let endRecord = Math.min(currentPageOut * rowsPerPage, totalData);
             info.innerText = `Menampilkan ${startRecord} - ${endRecord} dari ${totalData} data`;
 
-            nav.innerHTML = `<li class="page-item ${currentPageOut === 1 ? 'disabled' : ''}"><a class="page-link" href="#" onclick="ubahHalamanOut(${currentPageOut - 1})">Prev</a></li>`;
+            // Hanya tampilkan halaman di sekitar halaman aktif (lebih sedikit di HP)
+            const lebar = window.innerWidth < 576 ? 1 : 2;
+            const tampil = [];
             for (let i = 1; i <= totalPages; i++) {
-                nav.innerHTML += `<li class="page-item ${currentPageOut === i ? 'active' : ''}"><a class="page-link" href="#" onclick="ubahHalamanOut(${i})">${i}</a></li>`;
+                if (i === 1 || i === totalPages || Math.abs(i - currentPageOut) <= lebar) tampil.push(i);
             }
-            nav.innerHTML += `<li class="page-item ${currentPageOut === totalPages ? 'disabled' : ''}"><a class="page-link" href="#" onclick="ubahHalamanOut(${currentPageOut + 1})">Next</a></li>`;
+            const item = (label, page, aktif, mati) =>
+                `<li class="page-item ${aktif ? 'active' : ''} ${mati ? 'disabled' : ''}"><a class="page-link" href="#" onclick="ubahHalamanOut(${page}); return false;">${label}</a></li>`;
+
+            let html = item('Prev', currentPageOut - 1, false, currentPageOut === 1);
+            let sebelumnya = 0;
+            tampil.forEach(i => {
+                if (sebelumnya && i - sebelumnya > 1) html += `<li class="page-item disabled"><span class="page-link">&hellip;</span></li>`;
+                html += item(i, i, currentPageOut === i, false);
+                sebelumnya = i;
+            });
+            html += item('Next', currentPageOut + 1, false, currentPageOut === totalPages);
+            nav.innerHTML = html;
         }
 
         function ubahHalamanOut(page) {
-            let totalPages = Math.ceil(Object.keys(databaseMaster).length / rowsPerPage) || 1;
+            let totalPages = Math.ceil(getDaftarOutstanding().length / rowsPerPage) || 1;
             if (page < 1 || page > totalPages) return;
             currentPageOut = page;
             muatDataOutstanding();
