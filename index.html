@@ -265,7 +265,20 @@
             #menu-upload .form-control-sm { width: 100% !important; }
         }
 
-        /* === STATUS PESANAN - PROFESSIONAL UI (SCOPED) === */
+    
+    /* === KARTU ESTIMASI MOBIL (menu Outstanding) === */
+    :root { --em-part:#dc2626; --em-oli:#2563eb; --em-ban:#f59e0b; }
+    .est-mobil-wrap { display:flex; gap:6px; flex-wrap:wrap; align-items:stretch; justify-content:center; }
+    .est-mobil { display:flex; align-items:center; gap:8px; padding:4px 12px; border-radius:10px; color:#fff; line-height:1.15; box-shadow:0 2px 6px rgba(15,23,42,.18); }
+    .est-mobil .em-ico { font-size:1.1rem; opacity:.9; }
+    .est-mobil .em-num { font-size:1.35rem; font-weight:800; }
+    .est-mobil .em-label { font-size:.62rem; font-weight:700; letter-spacing:.4px; opacity:.95; text-transform:uppercase; }
+    .est-mobil .em-detail { font-size:.68rem; opacity:.92; white-space:nowrap; }
+    .est-mobil.em-part { background:var(--em-part); }
+    .est-mobil.em-oli { background:var(--em-oli); }
+    .est-mobil.em-ban { background:var(--em-ban); color:#1f2937; }
+
+    /* === STATUS PESANAN - PROFESSIONAL UI (SCOPED) === */
         #menu-status-pesanan .card {
             overflow: hidden;
             border-radius: 16px !important;
@@ -1310,6 +1323,23 @@
                                 <input type="date" id="outEnd" class="form-control form-control-sm" style="width: 130px;" onchange="muatDataOutstanding()">
                                 <button class="btn btn-sm btn-outline-danger" onclick="hapusFilterTanggal('outStart', 'outEnd'); muatDataOutstanding();"><i class="fas fa-times me-1"></i>Hapus Tgl</button>
                                 <input type="text" class="form-control form-control-sm" id="searchOut" placeholder="Cari Outstanding..." oninput="muatDataOutstanding()">
+                                <div class="est-mobil-wrap" id="estMobilWrap" title="Estimasi jumlah mobil untuk outstanding yang tampil (sesuai filter tanggal & pencarian)">
+                                    <div class="est-mobil em-part" title="Sparepart: 1 mobil = 200 dus">
+                                        <i class="fas fa-truck em-ico"></i>
+                                        <div><div class="em-label">Sparepart</div><div class="em-detail"><span id="estQtyPart">0</span> dus &bull; 200/mobil</div></div>
+                                        <div class="em-num"><span id="estMobilPart">0</span><small class="fs-6"> mobil</small></div>
+                                    </div>
+                                    <div class="est-mobil em-oli" title="Oli / DO: 1 mobil = 150 dus">
+                                        <i class="fas fa-truck em-ico"></i>
+                                        <div><div class="em-label">Oli / DO</div><div class="em-detail"><span id="estQtyOli">0</span> dus &bull; 150/mobil</div></div>
+                                        <div class="em-num"><span id="estMobilOli">0</span><small class="fs-6"> mobil</small></div>
+                                    </div>
+                                    <div class="est-mobil em-ban" title="Ban / IK: 1 mobil = 300 pcs">
+                                        <i class="fas fa-truck em-ico"></i>
+                                        <div><div class="em-label">Ban / IK</div><div class="em-detail"><span id="estQtyBan">0</span> pcs &bull; 300/mobil</div></div>
+                                        <div class="em-num"><span id="estMobilBan">0</span><small class="fs-6"> mobil</small></div>
+                                    </div>
+                                </div>
                                 <button class="btn btn-outline-danger btn-sm fw-bold shadow-sm text-nowrap" onclick="muatDataOutstanding()"><i class="fas fa-sync-alt me-1"></i> Refresh</button>
                                 <button class="btn btn-success btn-sm fw-bold shadow-sm text-nowrap" onclick="eksporOutstanding()" title="Ekspor sesuai filter tanggal & pencarian"><i class="fas fa-file-excel me-1"></i> Ekspor</button>
                             </div>
@@ -2582,6 +2612,7 @@
             case 'in': res = (x || []).some(function (y) { return String(y) === String(v); }); break;
             case 'ilike': case 'like': res = likeRe(String(x)).test(String(v == null ? '' : v)); break;
             case 'is': res = (x === null) ? (v == null) : (v === x); break;
+            case 'or': { var re = /([a-z_]+)\.ilike\."((?:[^"\\]|\\.)*)"/g, mm; res = false; while ((mm = re.exec(x))) { var pt = mm[2].replace(/\\(["\\])/g, '$1'); if (likeRe(pt).test(String(r[mm[1]] == null ? '' : r[mm[1]]))) { res = true; break; } } break; }
             default: res = true;
         }
         return neg ? !res : res;
@@ -2604,6 +2635,7 @@
         P.update = function (v) { this.op = 'update'; this.pl = v; return this; };
         P.delete = function () { this.op = 'delete'; return this; };
         ['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'in', 'ilike', 'like', 'is'].forEach(function (m) { P[m] = function (c, v) { this.f.push([m, c, v]); return this; }; });
+        P.or = function (str) { this.f.push(['or', null, str]); return this; };
         P.not = function (c, op, v) { this.f.push(['not:' + op, c, v]); return this; };
         P.order = function (c, o) { this.ord.push([c, !(o && o.ascending === false)]); return this; };
         P.range = function (a, b) { this.rg = [a, b]; return this; };
@@ -6772,7 +6804,7 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
                     const chunk = info.nos.slice(i, i + 100);
                     for (let from = 0; ; from += 1000) {
                         let q = sb.from('status_pesanan').select('*').in('nomor_customer', chunk);
-                        if (term) q = q.ilike('cari', spPolaLike(term));
+                        if (term) q = spTerapkanCari(q, term);
                         if (fTgl && fTgl.vals) q = q.in('shipment_date', fTgl.vals);
                         const { data, error } = await q.order('id', { ascending: true }).range(from, from + 999);
                         if (error) return { rows: [], error };
@@ -6822,6 +6854,17 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
             }
             if (shipmentVal && billingVal) return "Menunggu Pengiriman";
             return "Pesanan Dalam Proses";
+        }
+
+        // Pencarian Status Pesanan: cari langsung di kolom-kolom teks (tidak bergantung pada kolom bantu `cari`).
+        // Bila server menolak (mis. ada kolom non-teks), otomatis kembali ke kolom `cari`.
+        const SP_KOLOM_CARI = ['nomor_order', 'nomor_delivery', 'nomor_customer', 'nama_customer', 'material', 'description', 'qty', 'shipment_date', 'billing_no', 'shipment_no'];
+        let _spModeCari = 'kolom';
+        function spTerapkanCari(q, term) {
+            if (!term) return q;
+            if (_spModeCari === 'cari') return q.ilike('cari', spPolaLike(term));
+            const pola = spPolaLike(term).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+            return q.or(SP_KOLOM_CARI.map(c => c + '.ilike."' + pola + '"').join(','));
         }
 
         function spPolaLike(term) {
@@ -7074,7 +7117,7 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
             const from = (currentPageStatusPesanan - 1) * rowsPerPage;
 
             let q = sb.from('status_pesanan').select('*', { count: 'exact' });
-            if (term) q = q.ilike('cari', spPolaLike(term));
+            if (term) q = spTerapkanCari(q, term);
             const fTgl = spFilterTanggalVals();
             if (fTgl.error) {
                 tbody.innerHTML = `<tr><td colspan="11" class="empty-state"><i class="fas fa-triangle-exclamation d-block"></i>${dbSafe(fTgl.error)}</td></tr>`;
@@ -7094,6 +7137,7 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
                 res = { error: e };
             }
             if (seq !== _spServer.seq) return;   // sudah ada permintaan yang lebih baru
+            if (res.error && term && _spModeCari === 'kolom') { _spModeCari = 'cari'; return muatDataStatusPesanan(); }   // cadangan: pakai kolom `cari`
 
             if (res.error) {
                 console.error("Status Pesanan:", res.error);
@@ -7730,12 +7774,29 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
             XLSX.writeFile(wb, `Outstanding${rentang}.xlsx`);
         }
 
+        // Estimasi jumlah mobil dari daftar outstanding yang sedang tampil (ikut filter tanggal & pencarian)
+        const EST_MOBIL_KAPASITAS = { Part: 200, Oli: 150, Ban: 300 };   // Sparepart 200 dus, Oli/DO 150 dus, Ban/IK 300 pcs
+        function renderEstimasiMobilOutstanding(list) {
+            const tot = { Part: 0, Oli: 0, Ban: 0 };
+            (list || []).forEach(d => {
+                const jml = parseInt(d.jumlah_koli, 10) || 0;
+                const kat = lapKategoriKemasan(d);   // DO -> Oli, IK -> Ban, selain itu (DS/Koli/SP/dll) -> Sparepart
+                if (kat === 'Dus Oli') tot.Oli += jml; else if (kat === 'Dus Ban') tot.Ban += jml; else tot.Part += jml;
+            });
+            Object.keys(tot).forEach(k => {
+                const q = document.getElementById('estQty' + k), m = document.getElementById('estMobil' + k);
+                if (q) q.innerText = tot[k].toLocaleString('id-ID');
+                if (m) m.innerText = Math.ceil(tot[k] / EST_MOBIL_KAPASITAS[k]);
+            });
+        }
+
         function muatDataOutstanding() {
             let tbodyOut = document.getElementById('tabelOutstanding');
             if (!tbodyOut) return;
             tbodyOut.innerHTML = "";
 
             let outstandingList = getDaftarOutstanding();
+            try { renderEstimasiMobilOutstanding(outstandingList); } catch (e) { console.error(e); }
             const sembunyiLead = currentRole === 'sparepart' || currentRole === 'salespart';
             { const _tp = Math.ceil(outstandingList.length / rowsPerPage) || 1; if (currentPageOut > _tp) currentPageOut = _tp; }
 
