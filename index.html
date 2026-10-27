@@ -267,16 +267,20 @@
 
     
     /* === KARTU ESTIMASI MOBIL (menu Outstanding) === */
-    :root { --em-part:#dc2626; --em-oli:#2563eb; --em-ban:#f59e0b; }
+    :root { --em-part:#fde8e8; --em-part-ink:#9b4a4a; --em-part-line:#f2b8b8;
+            --em-oli:#e3eefc; --em-oli-ink:#42648f; --em-oli-line:#b5cdee;
+            --em-ban:#fdf3d8; --em-ban-ink:#8a6d2b; --em-ban-line:#efd89a;
+            --em-total:#e6f4ea; --em-total-ink:#3f6b4e; --em-total-line:#b6dcc2; }
     .est-mobil-wrap { display:flex; gap:6px; flex-wrap:wrap; align-items:stretch; justify-content:center; }
-    .est-mobil { display:flex; align-items:center; gap:8px; padding:4px 12px; border-radius:10px; color:#fff; line-height:1.15; box-shadow:0 2px 6px rgba(15,23,42,.18); }
-    .est-mobil .em-ico { font-size:1.1rem; opacity:.9; }
-    .est-mobil .em-num { font-size:1.35rem; font-weight:800; }
-    .est-mobil .em-label { font-size:.62rem; font-weight:700; letter-spacing:.4px; opacity:.95; text-transform:uppercase; }
-    .est-mobil .em-detail { font-size:.68rem; opacity:.92; white-space:nowrap; }
-    .est-mobil.em-part { background:var(--em-part); }
-    .est-mobil.em-oli { background:var(--em-oli); }
-    .est-mobil.em-ban { background:var(--em-ban); color:#1f2937; }
+    .est-mobil { display:flex; align-items:center; gap:8px; padding:4px 12px; border-radius:10px; line-height:1.15; border:1px solid; box-shadow:0 1px 3px rgba(15,23,42,.06); }
+    .est-mobil .em-ico { font-size:1.05rem; opacity:.75; }
+    .est-mobil .em-num { font-size:1.3rem; font-weight:700; }
+    .est-mobil .em-label { font-size:.62rem; font-weight:700; letter-spacing:.4px; text-transform:uppercase; }
+    .est-mobil .em-detail { font-size:.68rem; opacity:.85; white-space:nowrap; }
+    .est-mobil.em-part { background:var(--em-part); color:var(--em-part-ink); border-color:var(--em-part-line); }
+    .est-mobil.em-oli { background:var(--em-oli); color:var(--em-oli-ink); border-color:var(--em-oli-line); }
+    .est-mobil.em-ban { background:var(--em-ban); color:var(--em-ban-ink); border-color:var(--em-ban-line); }
+    .est-mobil.em-total { background:var(--em-total); color:var(--em-total-ink); border-color:var(--em-total-line); }
 
     /* === STATUS PESANAN - PROFESSIONAL UI (SCOPED) === */
         #menu-status-pesanan .card {
@@ -1338,6 +1342,11 @@
                                         <i class="fas fa-truck em-ico"></i>
                                         <div><div class="em-label">Ban / IK</div><div class="em-detail"><span id="estQtyBan">0</span> pcs &bull; 300/mobil</div></div>
                                         <div class="em-num"><span id="estMobilBan">0</span><small class="fs-6"> mobil</small></div>
+                                    </div>
+                                    <div class="est-mobil em-total" title="Total koli seluruh outstanding yang tampil">
+                                        <i class="fas fa-boxes-stacked em-ico"></i>
+                                        <div><div class="em-label">Total Koli</div><div class="em-detail">semua kategori</div></div>
+                                        <div class="em-num"><span id="estTotalKoli">0</span></div>
                                     </div>
                                 </div>
                                 <button class="btn btn-outline-danger btn-sm fw-bold shadow-sm text-nowrap" onclick="muatDataOutstanding()"><i class="fas fa-sync-alt me-1"></i> Refresh</button>
@@ -7783,6 +7792,8 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
                 const kat = lapKategoriKemasan(d);   // DO -> Oli, IK -> Ban, selain itu (DS/Koli/SP/dll) -> Sparepart
                 if (kat === 'Dus Oli') tot.Oli += jml; else if (kat === 'Dus Ban') tot.Ban += jml; else tot.Part += jml;
             });
+            const elTot = document.getElementById('estTotalKoli');
+            if (elTot) elTot.innerText = (tot.Part + tot.Oli + tot.Ban).toLocaleString('id-ID');
             Object.keys(tot).forEach(k => {
                 const q = document.getElementById('estQty' + k), m = document.getElementById('estMobil' + k);
                 if (q) q.innerText = tot[k].toLocaleString('id-ID');
