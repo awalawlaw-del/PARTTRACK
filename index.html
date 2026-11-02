@@ -2001,6 +2001,20 @@
                         </div>
                     </div>
 
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card shadow-sm border-0 mb-4 border-top border-secondary border-4">
+                                <div class="card-body p-4">
+                                    <h5 class="card-title fw-bold text-dark fs-6 mb-1"><i class="fas fa-clock-rotate-left text-secondary me-2"></i>8. Import Laporan Pengiriman Lama (sekali pindah data)</h5>
+                                    <div class="small text-muted mb-3">Untuk memindahkan Excel laporan pengiriman lama. Kolom dibaca dari judul: TANGGAL KIRIM, SHIPMENT, NO FAKTUR, KODE DEALER, NAMA DEALER, EXPEDISI, DS, DO, IK, TOTAL, DRIVER / ASS.D, KET, RACE. Baris tanpa nomor shipment dilewati, kolom tgl cetak &amp; lead time lama diabaikan, shipment yang sudah ada tidak ditimpa. Data lama masuk tanpa foto POD.</div>
+                                    <input class="form-control form-control-sm mb-3" type="file" id="fileLaporanLama" accept=".xlsx, .xls, .csv">
+                                    <button type="button" class="btn btn-secondary btn-sm w-100 fw-bold shadow-sm" onclick="importLaporanLama()"><i class="fas fa-cloud-upload-alt me-1"></i> Import ke Laporan Pengiriman</button>
+                                    <div class="upload-status text-muted mt-2" id="statusUploadLaporanLama"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                 </div>
 
             </div>
@@ -5322,6 +5336,156 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
                 } catch (e) { console.warn("Deteksi header gagal, pakai baris 1", e); }
             }
             return XLSX.utils.sheet_to_json(ws, optJson).filter(row => row && Object.keys(row).some(k => dbText(row[k]) !== ""));
+        }
+
+        // ============================================================
+        // IMPORT LAPORAN PENGIRIMAN LAMA (sekali pindah data dari Excel lama)
+        // ============================================================
+        function impTglISO(v) {
+            const p2 = n => String(n).padStart(2, "0");
+            if (v instanceof Date && !isNaN(v)) {
+                const d = new Date(v.getTime() + 12 * 3600 * 1000);   // +12 jam: aman dari selisih detik/zona waktu
+                return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`;
+            }
+            if (typeof v === "number" && v > 30000 && v < 80000) {
+                const d = new Date(Math.round((v - 25569) * 86400000));
+                return `${d.getUTCFullYear()}-${p2(d.getUTCMonth() + 1)}-${p2(d.getUTCDate())}`;
+            }
+            const t = String(v === undefined || v === null ? "" : v).trim();
+            let m = /^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4})$/.exec(t);   // dd/mm/yyyy
+            if (m) return `${m[3]}-${p2(m[2])}-${p2(m[1])}`;
+            m = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(t);                    // yyyy-mm-dd
+            if (m) return `${m[1]}-${p2(m[2])}-${p2(m[3])}`;
+            return "";
+        }
+
+        function impAngka(v) {
+            const n = parseFloat(String(v === undefined || v === null ? "" : v).replace(/,/g, ""));
+            return isNaN(n) ? 0 : n;
+        }
+
+        function impBacaLaporanLama(workbook) {
+            const norm = h => String(h === undefined || h === null ? "" : h).toLowerCase().replace(/[^a-z0-9]/g, "");
+            for (const nama of workbook.SheetNames) {
+                const aoa = XLSX.utils.sheet_to_json(workbook.Sheets[nama], { header: 1, defval: "", raw: true, blankrows: false });
+                let hIdx = -1;
+                for (let i = 0; i < Math.min(aoa.length, 15); i++) {
+                    const n = aoa[i].map(norm);
+                    if (n.some(x => x.includes("shipm")) && n.some(x => x.includes("tanggalkir") || x.includes("tglkir"))) { hIdx = i; break; }
+                }
+                if (hIdx < 0) continue;
+                const head = aoa[hIdx].map(norm);
+                const cari = f => head.findIndex(f);
+                const kol = {
+                    tgl: cari(x => x.includes("tanggalkir") || x.includes("tglkir")),
+                    ship: cari(x => x.includes("shipm") || x === "nosj" || x === "suratjalan"),
+                    faktur: cari(x => x.includes("faktur") && !x.includes("tgl") && !x.includes("tanggal")),
+                    kode: cari(x => x.includes("kodedeal") || x.includes("kodecust") || x === "nocust"),
+                    nama: cari(x => x.includes("namadeal") || x.includes("namadelaer") || x.includes("namacust")),
+                    eksp: cari(x => x.includes("expedisi") || x.includes("ekspedisi")),
+                    ds: cari(x => x === "ds"), dO: cari(x => x === "do"), ik: cari(x => x === "ik"),
+                    total: cari(x => x.startsWith("total")),
+                    driver: cari(x => x.includes("driver")),
+                    ket: cari(x => x === "ket"),
+                    race: cari(x => x.startsWith("rac"))
+                };
+                return { sheet: nama, kol, rows: aoa.slice(hIdx + 1) };
+            }
+            return null;
+        }
+
+        function importLaporanLama() {
+            if (currentRole !== "admin") { alert("Fitur ini hanya untuk Admin."); return; }
+            const input = document.getElementById("fileLaporanLama");
+            if (!input || !input.files || !input.files.length) { setUploadStatus("LaporanLama", "Pilih file Excel terlebih dahulu.", false); alert("Pilih file Excel laporan pengiriman lama terlebih dahulu."); return; }
+            const reader = new FileReader();
+            reader.onerror = () => setUploadStatus("LaporanLama", "File gagal dibaca browser.", false);
+            reader.onload = function (e) {
+                try {
+                    const wb = XLSX.read(e.target.result, { type: "array", cellDates: true });
+                    const hasil = impBacaLaporanLama(wb);
+                    if (!hasil) { setUploadStatus("LaporanLama", "Judul kolom tidak dikenali (butuh SHIPMENT dan TANGGAL KIRIM).", false); alert("Judul kolom tidak dikenali. Pastikan ada kolom SHIPMENT dan TANGGAL KIRIM di baris judul."); return; }
+                    const k = hasil.kol;
+                    if (k.tgl < 0 || k.ship < 0) { setUploadStatus("LaporanLama", "Kolom SHIPMENT / TANGGAL KIRIM tidak ditemukan.", false); return; }
+                    const g = (r, i) => (i >= 0 && r[i] !== undefined && r[i] !== null) ? r[i] : "";
+                    const sudahAda = new Set(transaksiData.map(t => dbKey(t.shipment)));
+                    const dalamFile = new Set();
+                    const baru = [];
+                    const lewat = { kosong: 0, tanpaShipment: 0, tanpaTanggal: 0, tanpaJumlah: 0, sudahAda: 0, dobelFile: 0 };
+
+                    hasil.rows.forEach(r => {
+                        if (!r.some(c => dbText(c) !== "")) { lewat.kosong++; return; }
+                        let ship = dbText(g(r, k.ship)).toUpperCase();
+                        if (!ship || ship === "-" || ship === "NAN") { lewat.tanpaShipment++; return; }
+                        const tgl = impTglISO(g(r, k.tgl));
+                        if (!tgl) { lewat.tanpaTanggal++; return; }
+                        const qDS = impAngka(g(r, k.ds)), qDO = impAngka(g(r, k.dO)), qIK = impAngka(g(r, k.ik));
+                        let total = Math.round(impAngka(g(r, k.total)) || (qDS + qDO + qIK));
+                        if (!(total >= 1)) { lewat.tanpaJumlah++; return; }
+                        if (sudahAda.has(dbKey(ship))) { lewat.sudahAda++; return; }
+                        if (dalamFile.has(dbKey(ship))) { lewat.dobelFile++; return; }
+                        dalamFile.add(dbKey(ship));
+
+                        let kemasan = "DS", maks = qDS;
+                        if (qDO > maks) { kemasan = "DO"; maks = qDO; }
+                        if (qIK > maks) { kemasan = "IK"; maks = qIK; }
+                        const driver = dbText(g(r, k.driver)).toUpperCase();
+                        const dibuat = new Date(tgl + "T08:00:00").getTime();
+                        baru.push({
+                            tgl_kirim: tgl, tgl_kirim_raw: tgl,
+                            driver: driver || "-", plat: "", tanpa_foto: true,
+                            race: parseInt(g(r, k.race)) || 1,
+                            shipment: ship, jenis_dokumen: "SJ", isi_barang: "", sp_items: [],
+                            no_faktur: dbText(g(r, k.faktur)) || "-",
+                            jenis_kemasan: kemasan,
+                            nama_dealer: dbText(g(r, k.nama)).toUpperCase() || "GENERAL CUSTOMER",
+                            no_customer: dbText(g(r, k.kode)),
+                            expedisi: dbText(g(r, k.eksp)).toUpperCase() || "REGULER",
+                            total: total, total_db: null, leadTimeVal: 0,
+                            status: "OK",
+                            podFoto: "", dibuat_at: dibuat, impor_lama: true
+                        });
+                    });
+
+                    if (!baru.length) {
+                        setUploadStatus("LaporanLama", `Tidak ada baris baru yang bisa diimport (tanpa shipment ${lewat.tanpaShipment}, sudah ada ${lewat.sudahAda}).`, false);
+                        alert("Tidak ada baris baru yang bisa diimport.\n\nTanpa nomor shipment: " + lewat.tanpaShipment + "\nShipment sudah ada: " + lewat.sudahAda + "\nTanpa tanggal kirim: " + lewat.tanpaTanggal + "\nTanpa jumlah: " + lewat.tanpaJumlah);
+                        return;
+                    }
+                    baru.sort((a, b) => b.dibuat_at - a.dibuat_at);
+                    const tglList = baru.map(x => x.tgl_kirim).sort();
+                    const totalDus = baru.reduce((s, x) => s + x.total, 0);
+                    const ringkas =
+                        `Sheet: ${hasil.sheet}\n` +
+                        `Akan diimport: ${baru.length.toLocaleString("id-ID")} surat jalan (${totalDus.toLocaleString("id-ID")} dus/koli)\n` +
+                        `Tanggal kirim: ${formatDateToDisplay(tglList[0])} s/d ${formatDateToDisplay(tglList[tglList.length - 1])}\n\n` +
+                        `Dilewati:\n- tanpa nomor shipment: ${lewat.tanpaShipment}\n- shipment sudah ada di laporan: ${lewat.sudahAda}\n- dobel di dalam file: ${lewat.dobelFile}\n- tanpa tanggal kirim: ${lewat.tanpaTanggal}\n- tanpa jumlah dus/koli: ${lewat.tanpaJumlah}\n- baris kosong: ${lewat.kosong}\n\n` +
+                        `Lanjutkan import?`;
+                    if (!confirm(ringkas)) { setUploadStatus("LaporanLama", "Import dibatalkan.", false); return; }
+
+                    baru.forEach(x => {
+                        shipmentTerinput.push(x.shipment);
+                        if (!pengembalianSJList.includes(x.shipment)) pengembalianSJList.push(x.shipment);
+                    });
+                    transaksiData = transaksiData.concat(baru);
+                    localStorage.setItem("gudang_transaksi", JSON.stringify(transaksiData));
+                    localStorage.setItem("gudang_shipment_terinput", JSON.stringify(shipmentTerinput));
+                    localStorage.setItem("gudang_pengembalian_sj", JSON.stringify(pengembalianSJList));
+
+                    input.value = "";
+                    updateStatistikUI();
+                    try { renderLaporanUlang(); } catch (e2) {}
+                    try { muatDataOutstanding(); } catch (e2) {}
+                    try { refreshInboxBadge(); } catch (e2) {}
+                    setUploadStatus("LaporanLama", `${baru.length.toLocaleString("id-ID")} surat jalan diimport • dilewati: tanpa shipment ${lewat.tanpaShipment}, sudah ada ${lewat.sudahAda}`, true);
+                    alert(`${baru.length.toLocaleString("id-ID")} surat jalan lama berhasil diimport.\n\nTunggu banner merah "Data belum tersimpan" hilang sebelum menutup halaman.`);
+                } catch (err) {
+                    console.error(err);
+                    setUploadStatus("LaporanLama", "Gagal import: " + err.message, false);
+                    alert("Gagal membaca file: " + err.message);
+                }
+            };
+            reader.readAsArrayBuffer(input.files[0]);
         }
 
         function uploadDB(type) {
