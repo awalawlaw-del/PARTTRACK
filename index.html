@@ -3027,6 +3027,7 @@ window.demoBoot = async function () {
     async function sbLogout() {
         if (window.DEMO_MODE) { window.demoKeluar(); return; }
         sbFlush();
+        if (pendingKeys.size && !confirm('Masih ada data yang BELUM tersimpan ke server. Jika keluar sekarang, data itu akan hilang.\n\nTetap keluar?')) return;
         try { await sb.auth.signOut(); } catch (e) {}
         hapusSesiLokal();
         await idbHapusSemua();   // hapus cache data di perangkat ini
@@ -3063,6 +3064,7 @@ window.demoBoot = async function () {
         if (lastSynced[key] === String(value)) return;
         clearTimeout(timers[key]);
         pendingKeys.add(key); tandaiBelumTersimpan();
+        simpanCadanganPending(key, String(value));
         timers[key] = setTimeout(() => { timers[key] = null; kirimKeServer(key); }, 500);
     };
 
@@ -3075,35 +3077,113 @@ window.demoBoot = async function () {
                 b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99997;background:#dc3545;color:#fff;font:600 13px Inter,sans-serif;padding:8px 12px;text-align:center';
                 document.body.appendChild(b);
             }
-            b.textContent = 'Data belum tersimpan ke server. Jangan refresh atau tutup halaman dulu...';
+            b.textContent = '';
+            const t = document.createElement('span');
+            t.textContent = 'Data belum tersimpan ke server. Jangan refresh atau tutup halaman dulu...'
+                + (gagalTerakhir ? ' (mencoba lagi otomatis)' : '');
+            b.appendChild(t);
+            const btn = document.createElement('button');
+            btn.textContent = 'Coba kirim lagi';
+            btn.style.cssText = 'margin-left:12px;background:#fff;color:#dc3545;border:0;border-radius:6px;padding:3px 10px;font:600 12px Inter,sans-serif;cursor:pointer';
+            btn.onclick = () => kirimSemuaPending(true);
+            b.appendChild(btn);
+            if (gagalTerakhir) {
+                const d = document.createElement('div');
+                d.style.cssText = 'font:400 11px Inter,sans-serif;opacity:.9;margin-top:2px';
+                d.textContent = 'Penyebab terakhir: ' + gagalTerakhir;
+                b.appendChild(d);
+            }
         } else if (b) b.remove();
     }
+    let gagalTerakhir = '';
+
+    // ---------- cadangan data yang belum terkirim (bertahan walau halaman di-refresh/ditutup) ----------
+    function _kunciCadangan(key) { return 'pending:' + ((window.__SB_PROFILE && window.__SB_PROFILE.id) || '') + ':' + key; }
+    function simpanCadanganPending(key, raw) { try { idbSet(_kunciCadangan(key), { s: raw, t: Date.now() }); } catch (e) {} }
+    async function hapusCadanganPending(key) {
+        try { const db = await idb(); await new Promise(res => { const t = db.transaction('kv', 'readwrite'); t.objectStore('kv').delete(_kunciCadangan(key)); t.oncomplete = t.onerror = t.onabort = () => res(); }); } catch (e) {}
+    }
+    // Dipanggil saat buka aplikasi: data yang dulu gagal terkirim dikembalikan lalu dikirim ulang
+    async function pulihkanCadanganPending() {
+        const dipulihkan = [];
+        for (const key of SHARED_KEYS) {
+            if (!bolehTulis(key)) continue;
+            const c = await idbGet(_kunciCadangan(key));
+            if (!c || typeof c.s !== 'string') continue;
+            if (c.s === lastSynced[key]) { hapusCadanganPending(key); continue; }   // ternyata sudah sama dengan server
+            lsSet(key, c.s);
+            pendingKeys.add(key);
+            dipulihkan.push(key);
+        }
+        if (dipulihkan.length) {
+            tandaiBelumTersimpan();
+            dipulihkan.forEach(k => kirimKeServer(k));
+            setTimeout(() => sbToast('Data yang belum sempat tersimpan dipulihkan dan dikirim ulang ke server'), 1500);
+        }
+    }
+    function kirimSemuaPending(paksa) {
+        [...pendingKeys].forEach(k => { if (paksa || !sedangKirim.has(k)) { clearTimeout(timerRetry[k]); kirimKeServer(k); } });
+    }
+    const sedangKirim = new Set();
+    const timerRetry = {};
+    window.addEventListener('online', () => kirimSemuaPending(true));
     window.addEventListener('beforeunload', e => { if (pendingKeys.size) { e.preventDefault(); e.returnValue = ''; } });
 
     async function kirimKeServer(key, percobaan) {
         percobaan = percobaan || 1;
+        if (sedangKirim.has(key)) return;   // sudah ada pengiriman berjalan untuk key ini; hasilnya dicek ulang setelah selesai
         const raw = localStorage.getItem(key);
-        if (raw === null) { pendingKeys.delete(key); tandaiBelumTersimpan(); return; }
+        if (raw === null) { pendingKeys.delete(key); hapusCadanganPending(key); tandaiBelumTersimpan(); return; }
         let val;
         try { val = JSON.parse(raw); } catch (e) { return; }
         pendingKeys.add(key); tandaiBelumTersimpan();
-        const { error } = await sb.from('app_store').upsert({ key, value: val, updated_at: new Date().toISOString(), client_id: CLIENT_ID });
+        sedangKirim.add(key);
+        let error = null;
+        const ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+        const batas = setTimeout(() => { try { ctl && ctl.abort(); } catch (e) {} }, 30000);   // jangan menggantung selamanya
+        try {
+            let q = sb.from('app_store').upsert({ key, value: val, updated_at: new Date().toISOString(), client_id: CLIENT_ID });
+            if (ctl && typeof q.abortSignal === 'function') q = q.abortSignal(ctl.signal);
+            const hasil = await Promise.race([
+                q,
+                new Promise((_, rej) => setTimeout(() => rej(new Error('Timeout: server tidak menjawab dalam 30 detik')), 31000))
+            ]);
+            error = hasil && hasil.error;
+        } catch (e) { error = e; }
+        clearTimeout(batas);
+        sedangKirim.delete(key);
         if (error) {
+            const pesan = String((error && (error.message || error.details)) || error || 'tidak diketahui');
             console.error('Gagal sync', key, error, 'ukuran(KB)=', Math.round(raw.length / 1024));
-            if (percobaan < 4) { setTimeout(() => kirimKeServer(key, percobaan + 1), 2000 * percobaan); return; }
-            sbToast('Gagal menyimpan ke server (' + key.replace('gudang_', '') + ', ' + Math.round(raw.length / 1024) + ' KB): ' + error.message, true);
-            return;   // tetap ditandai belum tersimpan
+            gagalTerakhir = key.replace('gudang_', '') + ' (' + Math.round(raw.length / 1024) + ' KB): ' + pesan;
+            tandaiBelumTersimpan();
+            // sesi login kedaluwarsa -> perbarui token dulu
+            if (/jwt|token|401|403|not authenticated/i.test(pesan + ' ' + (error.status || ''))) { try { await sb.auth.refreshSession(); } catch (e) {} }
+            if (percobaan === 3) sbToast('Gagal menyimpan ke server: ' + gagalTerakhir, true);
+            // coba lagi terus (jeda bertambah, maksimal 30 detik); data aman di cadangan lokal
+            clearTimeout(timerRetry[key]);
+            timerRetry[key] = setTimeout(() => kirimKeServer(key, percobaan + 1), Math.min(30000, 2000 * percobaan));
+            return;
         }
-        pendingKeys.delete(key); tandaiBelumTersimpan();
         lastSynced[key] = raw;
         window.__SB_DATA_DI_SERVER = true;
         if (key === 'gudang_db_dealer_list_raw') { syncDealerPublik(val); syncSalesPublik(val); }
+        if (localStorage.getItem(key) !== raw) {   // ada perubahan baru saat pengiriman berjalan -> kirim lagi yang terbaru
+            kirimKeServer(key);
+            return;
+        }
+        pendingKeys.delete(key); hapusCadanganPending(key);
+        if (!pendingKeys.size) gagalTerakhir = '';
+        tandaiBelumTersimpan();
     }
 
     function sbFlush() {
         Object.keys(timers).forEach(k => { if (timers[k]) { clearTimeout(timers[k]); timers[k] = null; kirimKeServer(k); } });
     }
-    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') sbFlush(); });
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') sbFlush();
+        else if (pendingKeys.size) kirimSemuaPending(false);
+    });
     window.addEventListener('pagehide', sbFlush);
 
     // Daftar dealer versi publik (hanya kode & nama) untuk halaman pendaftaran sebelum login
@@ -3379,6 +3459,7 @@ window.demoBoot = async function () {
                     setSesiLokal(prof);
                     tampilSplash('Mengambil data dari server...');
                     await Promise.all([muatDataDariServer(), muatProfilDariServer()]);
+                    try { await pulihkanCadanganPending(); } catch (e) { console.warn('pulihkan cadangan', e); }
                     tampilSplash('Menyiapkan tampilan...');
                     login = true;
                 } else {
