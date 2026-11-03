@@ -3057,11 +3057,13 @@ window.demoBoot = async function () {
         return false;
     }
 
+    const TX_KEY = 'gudang_transaksi';
     Storage.prototype.setItem = function (key, value) {
         if (this === localStorage && SHARED_KEYS.includes(key)) lsSet(key, value);
         else _origSetItem.call(this, key, value);
         if (this !== localStorage || applyingRemote || !SHARED_KEYS.includes(key) || !bolehTulis(key)) return;
         if (lastSynced[key] === String(value)) return;
+        if (key === TX_KEY && window.__TX_TABEL) { pendingKeys.add(key); tandaiBelumTersimpan(); jadwalTx(); return; }   // mode tabel: kirim per baris
         clearTimeout(timers[key]);
         pendingKeys.add(key); tandaiBelumTersimpan();
         simpanCadanganPending(key, String(value));
@@ -3108,6 +3110,7 @@ window.demoBoot = async function () {
         const dipulihkan = [];
         for (const key of SHARED_KEYS) {
             if (!bolehTulis(key)) continue;
+            if (key === TX_KEY && window.__TX_TABEL) continue;   // mode tabel punya cadangan sendiri (pulihkanTx)
             const c = await idbGet(_kunciCadangan(key));
             if (!c || typeof c.s !== 'string') continue;
             if (c.s === lastSynced[key]) { hapusCadanganPending(key); continue; }   // ternyata sudah sama dengan server
@@ -3131,6 +3134,7 @@ window.demoBoot = async function () {
 
     async function kirimKeServer(key, percobaan) {
         percobaan = percobaan || 1;
+        if (key === TX_KEY && window.__TX_TABEL) return kirimTransaksi(percobaan);
         if (sedangKirim.has(key)) return;   // sudah ada pengiriman berjalan untuk key ini; hasilnya dicek ulang setelah selesai
         const raw = localStorage.getItem(key);
         if (raw === null) { pendingKeys.delete(key); hapusCadanganPending(key); tandaiBelumTersimpan(); return; }
@@ -3177,7 +3181,250 @@ window.demoBoot = async function () {
         tandaiBelumTersimpan();
     }
 
+    // =====================================================================
+    // TRANSAKSI PER BARIS (tabel transaksi_sj) - menggantikan 1 baris besar app_store.gudang_transaksi
+    // Tiap scan hanya mengirim baris yang berubah. Bila tabel belum dibuat, otomatis pakai cara lama.
+    // =====================================================================
+    const lastTx = new Map();          // id -> { t: objek, j: json kanonik, urut }
+    const txAntrian = new Map();       // perubahan dari pengguna lain (id -> baris / null=hapus)
+    let txTimer = null, txJalan = false, txUlang = false, txRefreshTimer = null, txCursor = '1970-01-01T00:00:00+00:00';
+
+    function kanon(v) {   // JSON dengan urutan key tetap, supaya perbandingan tidak terpengaruh urutan key dari server
+        if (v === null || typeof v !== 'object') return JSON.stringify(v);
+        if (Array.isArray(v)) return '[' + v.map(x => (x === undefined || typeof x === 'function') ? 'null' : kanon(x)).join(',') + ']';
+        const ks = Object.keys(v).filter(k => v[k] !== undefined && typeof v[k] !== 'function').sort();
+        return '{' + ks.map(k => JSON.stringify(k) + ':' + kanon(v[k])).join(',') + '}';
+    }
+    function txId(t, seen) {
+        let base = String((t && t.shipment) || '').trim().toUpperCase() + ((t && t.dibuat_at) ? '|' + t.dibuat_at : '');
+        if (seen[base] === undefined) { seen[base] = 1; return base; }
+        seen[base]++; return base + '#' + seen[base];
+    }
+    function txBaris(id, t, urut) {
+        return { id, data: t, urut, shipment: String((t && t.shipment) || ''), status: String((t && t.status) || ''), tgl_kirim: String((t && t.tgl_kirim) || ''), client_id: CLIENT_ID };
+    }
+    function hitungDiffTx(arr) {
+        const seen = {}, now = new Map();
+        let minUrut = null; lastTx.forEach(v => { if (minUrut === null || v.urut < minUrut) minUrut = v.urut; });
+        let turun = 0;
+        arr.forEach(t => { const id = txId(t, seen); now.set(id, { t, j: kanon(t) }); });
+        const up = [], del = [];
+        now.forEach((v, id) => {
+            const lt = lastTx.get(id);
+            if (lt && lt.j === v.j) return;
+            let urut;
+            if (lt) urut = lt.urut;
+            else if (v.t && Number.isFinite(Number(v.t.dibuat_at)) && Number(v.t.dibuat_at) > 0) urut = Number(v.t.dibuat_at);
+            else urut = (minUrut === null ? 0 : minUrut) - (++turun);
+            const b = txBaris(id, v.t, urut); b.j = v.j; up.push(b);
+        });
+        lastTx.forEach((v, id) => { if (!now.has(id)) del.push(id); });
+        return { up, del };
+    }
+    function urutanTx() {
+        return [...lastTx.entries()].sort((a, b) => (b[1].urut - a[1].urut) || (a[0] < b[0] ? -1 : 1));
+    }
+    function larikDariTx() { return urutanTx().map(e => JSON.parse(JSON.stringify(e[1].t))); }
+
+    async function denganBatas(buat) {
+        const ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+        const batas = setTimeout(() => { try { ctl && ctl.abort(); } catch (e) {} }, 30000);
+        try {
+            let q = buat();
+            if (ctl && q && typeof q.abortSignal === 'function') q = q.abortSignal(ctl.signal);
+            return await Promise.race([q, new Promise((_, rej) => setTimeout(() => rej(new Error('Timeout: server tidak menjawab dalam 30 detik')), 31000))]);
+        } finally { clearTimeout(batas); }
+    }
+
+    function _kunciTx() { return 'pendingtx:' + ((window.__SB_PROFILE && window.__SB_PROFILE.id) || ''); }
+    function simpanCadanganTx(up, del) { try { idbSet(_kunciTx(), { up: up.map(x => ({ id: x.id, data: x.data, urut: x.urut })), del, t: Date.now() }); } catch (e) {} }
+    async function hapusCadanganTx() {
+        try { const db = await idb(); await new Promise(res => { const t = db.transaction('kv', 'readwrite'); t.objectStore('kv').delete(_kunciTx()); t.oncomplete = t.onerror = t.onabort = () => res(); }); } catch (e) {}
+    }
+
+    function jadwalTx() { clearTimeout(txTimer); txTimer = setTimeout(() => { txTimer = null; kirimTransaksi(1); }, 300); }
+
+    async function kirimTransaksi(percobaan) {
+        percobaan = percobaan || 1;
+        if (txJalan) { txUlang = true; return; }
+        txJalan = true; txUlang = false;
+        let gagal = false, ulangSegera = false;
+        try {
+            const raw = localStorage.getItem(TX_KEY);
+            let arr; try { arr = JSON.parse(raw); } catch (e) { return; }
+            if (!Array.isArray(arr)) return;
+            const { up, del } = hitungDiffTx(arr);
+            if (!up.length && !del.length) {
+                pendingKeys.delete(TX_KEY); hapusCadanganTx(); lastSynced[TX_KEY] = raw;
+                if (!pendingKeys.size) gagalTerakhir = '';
+                tandaiBelumTersimpan(); return;
+            }
+            // pengaman: penghapusan massal harus dikonfirmasi
+            if (del.length > 50 && del.length > lastTx.size * 0.5 &&
+                !confirm('Perubahan ini akan MENGHAPUS ' + del.length + ' data transaksi dari server. Lanjutkan?')) {
+                terapkanLarikTx(); pendingKeys.delete(TX_KEY); hapusCadanganTx(); tandaiBelumTersimpan(); return;
+            }
+            simpanCadanganTx(up, del);
+            for (let i = 0; i < up.length; i += 100) {
+                const b = up.slice(i, i + 100);
+                const r = await denganBatas(() => sb.from('transaksi_sj').upsert(b.map(x => txBaris(x.id, x.data, x.urut))));
+                if (r && r.error) throw r.error;
+                b.forEach(x => lastTx.set(x.id, { t: x.data, j: x.j, urut: x.urut }));
+            }
+            for (let i = 0; i < del.length; i += 100) {
+                const b = del.slice(i, i + 100);
+                const r = await denganBatas(() => sb.from('transaksi_sj').delete().in('id', b));
+                if (r && r.error) throw r.error;
+                b.forEach(id => lastTx.delete(id));
+            }
+            if (localStorage.getItem(TX_KEY) !== raw) { ulangSegera = true; }   // ada perubahan baru saat mengirim
+            else {
+                pendingKeys.delete(TX_KEY); hapusCadanganTx(); lastSynced[TX_KEY] = raw;
+                if (!pendingKeys.size) gagalTerakhir = '';
+                tandaiBelumTersimpan();
+            }
+        } catch (error) {
+            gagal = true;
+            const pesan = String((error && (error.message || error.details)) || error || 'tidak diketahui');
+            console.error('Gagal sync transaksi', error);
+            gagalTerakhir = 'transaksi: ' + pesan;
+            tandaiBelumTersimpan();
+            if (/jwt|token|401|403|not authenticated/i.test(pesan + ' ' + (error && error.status || ''))) { try { await sb.auth.refreshSession(); } catch (e) {} }
+            if (percobaan === 3) sbToast('Gagal menyimpan ke server: ' + gagalTerakhir, true);
+            clearTimeout(timerRetry[TX_KEY]);
+            timerRetry[TX_KEY] = setTimeout(() => kirimTransaksi(percobaan + 1), Math.min(30000, 2000 * percobaan));
+        } finally { txJalan = false; }
+        if (!gagal && (ulangSegera || txUlang)) { txUlang = false; kirimTransaksi(1); }
+        else if (!gagal && txAntrian.size) terapkanTxRemote();
+    }
+
+    // terapkan isi lastTx ke data lokal + tampilan (dipakai saat ada perubahan dari pengguna lain)
+    function terapkanLarikTx() {
+        const arr = larikDariTx();
+        const s = JSON.stringify(arr);
+        applyingRemote = true;
+        try {
+            lsSet(TX_KEY, s); lastSynced[TX_KEY] = s;
+            try { VAR_SETTERS[TX_KEY](arr); } catch (e) { console.warn('setter transaksi', e); }
+            ['refreshAfterDatabaseChange', 'muatTabelDriverPOD', 'muatRekapHarian'].forEach(fn => {
+                try { if (typeof window[fn] === 'function') window[fn](); } catch (e) {}
+            });
+        } finally { applyingRemote = false; }
+    }
+
+    async function terapkanTxRemote() {
+        if (pendingKeys.has(TX_KEY) || txJalan) { clearTimeout(txRefreshTimer); txRefreshTimer = setTimeout(terapkanTxRemote, 1500); return; }
+        if (!txAntrian.size) return;
+        let berubah = false;
+        txAntrian.forEach((rec, id) => {
+            if (rec === null) { if (lastTx.delete(id)) berubah = true; return; }
+            const j = kanon(rec.data), urut = Number(rec.urut), lt = lastTx.get(id);
+            if (!lt || lt.j !== j || lt.urut !== urut) { lastTx.set(id, { t: rec.data, j, urut }); berubah = true; }
+        });
+        txAntrian.clear();
+        if (!berubah) return;
+        terapkanLarikTx();
+        sbToast('Data diperbarui oleh pengguna lain');
+    }
+    function onTxChange(payload) {
+        if (!window.__TX_TABEL) return;
+        const hapus = payload.eventType === 'DELETE';
+        const rec = hapus ? payload.old : payload.new;
+        if (!rec || !rec.id) return;
+        if (!hapus && rec.client_id === CLIENT_ID) return;
+        txAntrian.set(rec.id, hapus ? null : rec);
+        clearTimeout(txRefreshTimer); txRefreshTimer = setTimeout(terapkanTxRemote, 500);
+    }
+    async function cekTxBerkala() {   // cadangan bila sinyal realtime tidak sampai
+        if (!window.__TX_TABEL || document.hidden || applyingRemote) return;
+        try {
+            const { data, error } = await sb.from('transaksi_sj').select('id,urut,data,client_id,updated_at')
+                .gt('updated_at', txCursor).order('updated_at').limit(500);
+            if (error || !data || !data.length) return;
+            data.forEach(r => { if (r.updated_at > txCursor) txCursor = r.updated_at; if (r.client_id !== CLIENT_ID) txAntrian.set(r.id, r); });
+            if (txAntrian.size) { clearTimeout(txRefreshTimer); txRefreshTimer = setTimeout(terapkanTxRemote, 300); }
+        } catch (e) {}
+    }
+
+    async function migrasiTransaksi(arr) {
+        const seen = {}, n = arr.length;
+        const rows = arr.map((t, i) => txBaris(txId(t, seen), t, n - i));   // urutan array lama dipertahankan
+        try {
+            for (let i = 0; i < rows.length; i += 150) {
+                const b = rows.slice(i, i + 150);
+                const r = await denganBatas(() => sb.from('transaksi_sj').upsert(b));
+                if (r && r.error) throw r.error;
+                sbToast('Memindahkan data transaksi... ' + Math.min(i + 150, rows.length) + ' / ' + rows.length);
+            }
+        } catch (e) {
+            console.error('Migrasi transaksi gagal', e);
+            let bersih = false;
+            try { const d = await sb.from('transaksi_sj').delete().neq('id', '__tidak_ada__'); bersih = !d.error; } catch (x) {}
+            alert('Pemindahan data transaksi ke tabel baru GAGAL: ' + (e && e.message ? e.message : e) +
+                (bersih ? '\n\nData lama di server aman. Aplikasi tetap memakai cara lama; coba lagi nanti.'
+                        : '\n\nPENTING: kosongkan tabel transaksi_sj di Supabase (truncate table transaksi_sj) sebelum mencoba lagi.'));
+            return false;
+        }
+        lastTx.clear();
+        rows.forEach(x => lastTx.set(x.id, { t: x.data, j: kanon(x.data), urut: x.urut }));
+        return true;
+    }
+
+    // Dipanggil saat boot, sesudah data app_store dimuat. Mengembalikan true bila mode tabel aktif.
+    async function muatTransaksiTabel() {
+        window.__TX_TABEL = false; lastTx.clear();
+        let cnt;
+        try {
+            const r = await sb.from('transaksi_sj').select('id', { count: 'exact', head: true });
+            if (r.error) { console.info('[transaksi] tabel transaksi_sj belum tersedia, memakai cara lama:', r.error.message); return false; }
+            cnt = r.count || 0;
+        } catch (e) { return false; }
+        if (cnt === 0) {
+            let lokal = null; try { lokal = JSON.parse(localStorage.getItem(TX_KEY)); } catch (e) {}
+            if (Array.isArray(lokal) && lokal.length) {
+                if (window.__SB_PROFILE.role !== 'admin') return false;   // tunggu Admin memindahkan data
+                if (!confirm('Tabel transaksi_sj sudah siap.\n\nPindahkan ' + lokal.length + ' data transaksi ke tabel baru sekarang?\n(Data lama tetap disimpan sebagai cadangan. Minta pengguna lain menutup/reload aplikasi setelah ini.)')) return false;
+                if (!(await migrasiTransaksi(lokal))) return false;
+                window.__TX_TABEL = true; txCursor = new Date().toISOString();
+                alert('Pemindahan selesai: ' + lokal.length + ' data transaksi.\nMinta semua pengguna lain me-reload aplikasi.');
+                return true;
+            }
+            window.__TX_TABEL = true; return true;
+        }
+        const rows = [];
+        for (let from = 0; ; from += 500) {
+            const { data, error } = await sb.from('transaksi_sj').select('id,urut,data,updated_at').order('urut', { ascending: false }).order('id').range(from, from + 499);
+            if (error) throw error;
+            rows.push(...data);
+            if (data.length < 500) break;
+        }
+        rows.forEach(r => {
+            lastTx.set(r.id, { t: r.data, j: kanon(r.data), urut: Number(r.urut) });
+            if (r.updated_at > txCursor) txCursor = r.updated_at;
+        });
+        const s = JSON.stringify(larikDariTx());
+        lsSet(TX_KEY, s); lastSynced[TX_KEY] = s;
+        window.__TX_TABEL = true;
+        return true;
+    }
+
+    // Pulihkan perubahan transaksi yang belum sempat terkirim (dari cadangan lokal) lalu kirim ulang
+    async function pulihkanTx() {
+        if (!window.__TX_TABEL || !bolehTulis(TX_KEY)) return;
+        const c = await idbGet(_kunciTx());
+        if (!c || (!(c.up && c.up.length) && !(c.del && c.del.length))) { hapusCadanganTx(); return; }
+        const kerja = new Map([...lastTx.entries()].map(([id, v]) => [id, { t: JSON.parse(JSON.stringify(v.t)), urut: v.urut }]));
+        (c.up || []).forEach(x => kerja.set(x.id, { t: x.data, urut: x.urut }));
+        (c.del || []).forEach(id => kerja.delete(id));
+        const arr = [...kerja.entries()].sort((a, b) => (b[1].urut - a[1].urut) || (a[0] < b[0] ? -1 : 1)).map(e => e[1].t);
+        lsSet(TX_KEY, JSON.stringify(arr));
+        pendingKeys.add(TX_KEY); tandaiBelumTersimpan();
+        kirimTransaksi(1);
+        setTimeout(() => sbToast('Data yang belum sempat tersimpan dipulihkan dan dikirim ulang ke server'), 1500);
+    }
+
     function sbFlush() {
+        if (window.__TX_TABEL && pendingKeys.has(TX_KEY)) { clearTimeout(txTimer); kirimTransaksi(1); }
         Object.keys(timers).forEach(k => { if (timers[k]) { clearTimeout(timers[k]); timers[k] = null; kirimKeServer(k); } });
     }
     document.addEventListener('visibilitychange', () => {
@@ -3354,6 +3601,7 @@ window.demoBoot = async function () {
     function onAppStoreChange(payload) {
         const rec = payload.new && payload.new.key ? payload.new : payload.old;
         if (!rec || !SHARED_KEYS.includes(rec.key)) return;
+        if (window.__TX_TABEL && rec.key === TX_KEY) return;   // transaksi dikelola lewat tabel transaksi_sj
         if (payload.eventType !== 'DELETE' && rec.client_id === CLIENT_ID) return;   // perubahan dari tab ini sendiri
         if (_pollVersi && rec.updated_at) _pollVersi[rec.key] = rec.updated_at;
         antrianRefresh.add(rec.key);
@@ -3387,6 +3635,7 @@ window.demoBoot = async function () {
     function mulaiRealtime() {
         sb.channel('gudang-sync')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'app_store' }, onAppStoreChange)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'transaksi_sj' }, onTxChange)
             .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, p => {
                 const r = p.new;
                 const me = window.__SB_PROFILE;
@@ -3401,6 +3650,7 @@ window.demoBoot = async function () {
         // Cadangan: bila sinyal realtime tidak sampai, cek perubahan ke server tiap 20 detik.
         cekPerubahanBerkala();
         setInterval(cekPerubahanBerkala, 20000);
+        setInterval(cekTxBerkala, 20000);
     }
 
     let _pollVersi = null;
@@ -3414,6 +3664,7 @@ window.demoBoot = async function () {
             if (_pollVersi) {
                 data.forEach(m => {
                     if (!SHARED_KEYS.includes(m.key)) return;
+                    if (window.__TX_TABEL && m.key === TX_KEY) return;
                     if (_pollVersi[m.key] !== m.updated_at && m.client_id !== CLIENT_ID) antrianRefresh.add(m.key);
                 });
                 if (antrianRefresh.size) { clearTimeout(refreshTimer); refreshTimer = setTimeout(terapkanPerubahanRemote, 300); }
@@ -3459,7 +3710,8 @@ window.demoBoot = async function () {
                     setSesiLokal(prof);
                     tampilSplash('Mengambil data dari server...');
                     await Promise.all([muatDataDariServer(), muatProfilDariServer()]);
-                    try { await pulihkanCadanganPending(); } catch (e) { console.warn('pulihkan cadangan', e); }
+                    await muatTransaksiTabel();   // pakai tabel transaksi_sj bila sudah dibuat; kalau belum, cara lama
+                    try { await pulihkanCadanganPending(); await pulihkanTx(); } catch (e) { console.warn('pulihkan cadangan', e); }
                     tampilSplash('Menyiapkan tampilan...');
                     login = true;
                 } else {
