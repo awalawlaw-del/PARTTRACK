@@ -898,6 +898,11 @@
                         <i class="fas fa-table-list"></i><span>Rekap Harian</span>
                     </button>
                 </li>
+                <li class="nav-item role-menu sp-access wh-access admin-only" role="presentation">
+                    <button class="nav-link w-100 text-start" data-bs-toggle="pill" data-bs-target="#menu-kartu-armada" type="button" role="tab" onclick="muatKartuArmada()">
+                        <i class="fas fa-id-card"></i><span>Kartu Armada</span>
+                    </button>
+                </li>
                 <li class="nav-item role-menu admin-only" role="presentation">
                     <button class="nav-link w-100 text-start" data-bs-toggle="pill" data-bs-target="#menu-upload" type="button" role="tab">
                         <i class="fas fa-file-upload"></i><span>Upload Database</span>
@@ -946,10 +951,11 @@
                     <div class="row g-3 mb-3">
                         <div class="col-md-12 d-flex align-items-center gap-2 flex-wrap bg-white p-2 rounded shadow-sm">
                             <span class="fw-bold small text-secondary me-1"><i class="fas fa-calendar-alt text-primary me-1"></i> Filter Tanggal:</span>
-                            <input type="date" id="keluarStart" class="form-control form-control-sm" style="width: 140px;">
+                            <input type="date" id="keluarStart" class="form-control form-control-sm" style="width: 140px;" onchange="updateStatistikUI()" title="Filter berdasarkan Tanggal Kirim">
                             <span class="small text-muted">s/d</span>
-                            <input type="date" id="keluarEnd" class="form-control form-control-sm" style="width: 140px;">
-                            <button class="btn btn-sm btn-outline-danger py-1" onclick="hapusFilterTanggal('keluarStart', 'keluarEnd')"><i class="fas fa-times me-1"></i>Hapus Tgl</button>
+                            <input type="date" id="keluarEnd" class="form-control form-control-sm" style="width: 140px;" onchange="updateStatistikUI()" title="Filter berdasarkan Tanggal Kirim">
+                            <button class="btn btn-sm btn-outline-danger py-1" onclick="hapusFilterTanggal('keluarStart', 'keluarEnd'); updateStatistikUI();"><i class="fas fa-times me-1"></i>Hapus Tgl</button>
+                            <span class="small text-muted ms-1" id="keluarFilterInfo"></span>
                         </div>
                     </div>
 
@@ -1173,12 +1179,12 @@
                         <div class="card-header bg-white text-dark py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
                             <h5 class="mb-0 fw-bold"><i class="fas fa-clipboard-check text-primary me-2"></i>Monitoring Status Pesanan</h5>
                             <div class="d-flex gap-2 align-items-center flex-wrap">
-                                <input type="date" id="spHapusStart" class="form-control form-control-sm" style="width: 130px;" title="Filter Shipment Date: tanggal awal" onchange="spFilterTanggalBerubah()">
-                                <input type="date" id="spHapusEnd" class="form-control form-control-sm" style="width: 130px;" title="Filter Shipment Date: tanggal akhir" onchange="spFilterTanggalBerubah()">
+                                <input type="date" id="spHapusStart" class="form-control form-control-sm" style="width: 130px;" title="Filter Creation Date: tanggal awal" onchange="spFilterTanggalBerubah()">
+                                <input type="date" id="spHapusEnd" class="form-control form-control-sm" style="width: 130px;" title="Filter Creation Date: tanggal akhir" onchange="spFilterTanggalBerubah()">
                                 <button class="btn btn-outline-secondary btn-sm fw-bold text-nowrap" onclick="spResetFilterTanggal()" title="Hapus filter tanggal"><i class="fas fa-rotate-left me-1"></i> Reset</button>
                                 <div class="admin-only" style="display:none;">
                                     <div class="d-flex gap-2 align-items-center flex-wrap">
-                                        <button class="btn btn-danger btn-sm fw-bold text-nowrap shadow-sm" onclick="hapusStatusPesananByTanggal()" title="Hapus semua pesanan dengan Shipment Date dalam rentang tanggal awal s/d akhir"><i class="fas fa-trash-alt me-1"></i> Hapus per Tanggal</button>
+                                        <button class="btn btn-danger btn-sm fw-bold text-nowrap shadow-sm" onclick="hapusStatusPesananByTanggal()" title="Hapus semua pesanan dengan Creation Date dalam rentang tanggal awal s/d akhir"><i class="fas fa-trash-alt me-1"></i> Hapus per Tanggal</button>
                                         <button class="btn btn-dark btn-sm fw-bold text-nowrap shadow-sm" onclick="hapusSemuaStatusPesanan()" title="Hapus SELURUH data Status Pesanan tanpa memilih tanggal"><i class="fas fa-dumpster-fire me-1"></i> Hapus Semua</button>
                                     </div>
                                 </div>
@@ -1209,6 +1215,7 @@
                                             <th>Description</th>
                                             <th>QTY</th>
                                             <th>Shipment Date</th>
+                                            <th>Creation Date</th>
                                             <th>Billing No</th>
                                             <th>Shipment No</th>
                                             <th>Status</th>
@@ -1801,27 +1808,6 @@
                                 </table>
                             </div>
 
-                            <h6 class="fw-bold text-secondary mb-2 mt-4">Rincian Harian</h6>
-                            <div class="small text-muted mb-2">Per <b>Tanggal Kirim</b> (hanya tanggal yang ada data). <b>DO</b>, <b>DS</b>, <b>IK</b> = jumlah dus per kode kemasan; <b>Lain</b> = kode kemasan selain DO/DS/IK. <b>Koli</b> (termasuk SP) dihitung sebagai DS; <b>D0</b> disatukan dengan <b>DO</b>. Lead time tidak menghitung SP. <b>Outstanding</b> diisi sekali per tanggal di menu Surat Jalan Keluar.</div>
-                            <div class="table-responsive">
-                                <table class="table table-bordered table-striped align-middle text-center mb-0" style="min-width:1200px;">
-                                    <thead>
-                                        <tr>
-                                            <th rowspan="2" class="text-start">Tanggal</th>
-                                            <th colspan="5">Terantar (Dus / Koli)</th>
-                                            <th rowspan="2">Rata-rata Lead Time</th>
-                                            <th colspan="3">Jumlah Race per Armada</th>
-                                            <th rowspan="2">Outstanding Pengantaran</th>
-                                            <th rowspan="2">Jumlah Surat Jalan<br><span class="fw-normal">(termasuk SP)</span></th>
-                                        </tr>
-                                        <tr>
-                                            <th>DO</th><th>DS</th><th>IK</th><th>Lain</th><th>Total</th>
-                                            <th>HSO Tetap</th><th>HSO Tidak Tetap</th><th>Armada Lain (KGP/JNE)</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="lapTabelHarian"></tbody>
-                                </table>
-                            </div>
                         </div>
                     </div>
                 </div>
@@ -1859,6 +1845,44 @@
                                         </tr>
                                     </thead>
                                     <tbody id="rekapTabel"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- MENU KARTU ARMADA -->
+                <div class="tab-pane fade" id="menu-kartu-armada" role="tabpanel">
+                    <div class="card shadow-sm border-0 mb-4">
+                        <div class="card-header bg-white text-dark py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                            <h5 class="mb-0 fw-bold"><i class="fas fa-id-card text-primary me-2"></i>Kartu Armada</h5>
+                            <div class="d-flex gap-2 align-items-center flex-wrap">
+                                <input type="date" id="kartuStart" class="form-control form-control-sm" style="width:140px;" onchange="muatKartuArmada()">
+                                <span class="small text-muted">s/d</span>
+                                <input type="date" id="kartuEnd" class="form-control form-control-sm" style="width:140px;" onchange="muatKartuArmada()">
+                                <select id="kartuDriver" class="form-select form-select-sm" style="width:190px;" onchange="muatKartuArmada()"><option value="">Semua Driver</option></select>
+                                <button class="btn btn-success btn-sm fw-bold shadow-sm" onclick="eksporKartuArmada()"><i class="fas fa-file-excel me-1"></i> Ekspor Excel</button>
+                            </div>
+                        </div>
+                        <div class="card-body p-4">
+                            <div class="small text-muted mb-3">Per <b>Tanggal Kirim</b> dan per <b>Driver</b>: jumlah surat jalan (termasuk SP), jumlah race, serta jumlah dus/koli <b>Oli</b> (kode DO), <b>Ban</b> (kode IK) dan <b>Sparepart</b> (kode lainnya, termasuk Koli &amp; SP).</div>
+                            <div class="row g-3 mb-4" id="kartuKpi"></div>
+                            <div class="table-responsive">
+                                <table class="table table-bordered align-middle text-center mb-0" style="min-width:900px;">
+                                    <thead>
+                                        <tr>
+                                            <th class="text-start">Tanggal</th>
+                                            <th class="text-start">Driver</th>
+                                            <th>Armada</th>
+                                            <th>Jumlah Surat Jalan</th>
+                                            <th>Race</th>
+                                            <th>Oli</th>
+                                            <th>Ban</th>
+                                            <th>Sparepart</th>
+                                            <th>Total</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="kartuTabel"></tbody>
                                 </table>
                             </div>
                         </div>
@@ -2553,12 +2577,12 @@
             var dl2 = DLR.filter(function (x) { return x[0] === ms.nama_customer; })[0];
             var shipped = od % 6 !== 5;   // beberapa order belum ada shipment
             var nOrd = String(5100230000 + od * 4), nDel = String(8000990000 + od * 6), nLines = ri(2, 6);
-            var sdate = shipped ? dmy(-ri(0, 12)) : '';
+            var sdate = shipped ? dmy(-ri(0, 12)) : '', cdate = dmy(-ri(13, 25));
             for (var ln = 0; ln < nLines; ln++) {
                 var part = pick(PARTS);
                 var r = {
                     id: idSeq++, nomor_order: nOrd, nomor_delivery: shipped ? nDel : '', nomor_customer: dl2[1], nama_customer: dl2[0], material: part[0], description: part[1],
-                    qty: String(ri(1, 20)), shipment_date: sdate, billing_no: shipped ? ms.billing.split(',')[0].trim() : '', shipment_no: shipped ? ms.shipment : '',
+                    qty: String(ri(1, 20)), shipment_date: sdate, creation_date: cdate, billing_no: shipped ? ms.billing.split(',')[0].trim() : '', shipment_no: shipped ? ms.shipment : '',
                     batch_id: 'demo_batch', row_no: rowNo++, tanggal_upload: iso(-1)
                 };
                 spRows.push(r);
@@ -5138,9 +5162,9 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
             return strVal.split('T')[0].split(' ')[0];
         }
 
-        function hitungTotalRaceUnique() {
+        function hitungTotalRaceUnique(daftar) {
             let uniqueRaces = new Set();
-            transaksiData.forEach(item => {
+            (daftar || transaksiData).forEach(item => {
                 uniqueRaces.add(`${item.tgl_kirim_raw}_${item.driver}_${item.race}`);
             });
             return uniqueRaces.size;
@@ -5250,7 +5274,7 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
             if (!tbody) return;
             tbody.innerHTML = "";
 
-            let dataDP = transaksiData.filter(isDalamPengantaran);
+            let dataDP = dataKeluarFilter().filter(isDalamPengantaran);
 
             if (dataDP.length === 0) {
                 tbody.innerHTML = `<tr><td colspan="10" class="text-muted py-4">Tidak ada Surat Jalan dalam pengantaran. Semua bukti foto sudah di-upload driver.</td></tr>`;
@@ -5291,7 +5315,7 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
             if (!tbody) return;
             tbody.innerHTML = "";
 
-            let lumKembaliData = transaksiData.filter(i => !isDokOK(i));
+            let lumKembaliData = dataKeluarFilter().filter(i => !isDokOK(i));
 
             if (lumKembaliData.length === 0) {
                 tbody.innerHTML = `<tr><td colspan="9" class="text-muted py-4">Semua Surat Jalan telah dikembalikan (Status: OK).</td></tr>`;
@@ -5339,11 +5363,11 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
         }
 
         function eksporBelumKembali() {
-            eksporDaftarSJ(transaksiData.filter(i => !isDokOK(i)), "Belum Kembali", "Surat_Jalan_Belum_Kembali", "BELUM KEMBALI");
+            eksporDaftarSJ(dataKeluarFilter().filter(i => !isDokOK(i)), "Belum Kembali", "Surat_Jalan_Belum_Kembali", "BELUM KEMBALI");
         }
 
         function eksporDalamPengantaran() {
-            eksporDaftarSJ(transaksiData.filter(isDalamPengantaran), "Dalam Pengantaran", "Surat_Jalan_Dalam_Pengantaran", "DALAM PENGANTARAN");
+            eksporDaftarSJ(dataKeluarFilter().filter(isDalamPengantaran), "Dalam Pengantaran", "Surat_Jalan_Dalam_Pengantaran", "DALAM PENGANTARAN");
         }
 
 
@@ -5407,6 +5431,20 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
         // ============================================================
         function spNorm(s) { return String(s === undefined || s === null ? "" : s).toLowerCase().replace(/[^a-z0-9]/g, ""); }
         function spKunciNo(v) { return dbKey(v).replace(/^0+(?=\d)/, ""); }
+
+        // Creation Date dari Excel/SAP -> dd/mm/yyyy (format yang dipakai Filter Tanggal & Hapus per Tanggal).
+        // Menangani: m/d/yy (format bawaan SheetJS, bulan dulu), yyyy-mm-dd, dd.mm.yyyy, dd-mm-yyyy; jam di belakang tanggal dibuang.
+        function spNormTanggal(v) {
+            v = String(v === undefined || v === null ? "" : v).trim();
+            if (!v) return "";
+            v = v.replace(/[T\s]+\d{1,2}:\d{2}(:\d{2})?.*$/, "");
+            const p2 = (x) => String(x).padStart(2, "0");
+            let m;
+            if ((m = /^(\d{1,2})\/(\d{1,2})\/(\d{2})$/.exec(v))) return p2(m[2]) + "/" + p2(m[1]) + "/20" + m[3];
+            if ((m = /^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})$/.exec(v))) return p2(m[3]) + "/" + p2(m[2]) + "/" + m[1];
+            if ((m = /^(\d{1,2})[-.](\d{1,2})[-.](\d{4})$/.exec(v))) return p2(m[1]) + "/" + p2(m[2]) + "/" + m[3];
+            return v;
+        }
 
         // Sama persis dengan cara getRowValue memilih kolom (exact dulu, lalu "mengandung"), tapi hasilnya nama kolom.
         function spResolveKolomAlias(keys, aliases) {
@@ -5478,6 +5516,7 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
                 description: spResolveKolomAlias(keys, ["description", "material description", "deskripsi", "nama material", "item description"]),
                 qty: spResolveKolomAlias(keys, ["qty", "quantity", "order qty", "quantity order", "jumlah", "jumlah qty"]),
                 shipmentDate: spResolveKolomAlias(keys, ["shipment date", "tanggal shipment", "tgl shipment", "ship date", "tanggal kirim"]),
+                creationDate: spResolveKolomAlias(keys, ["creation date", "created on", "created date", "date created", "tanggal creation", "tgl creation", "tanggal dibuat", "tgl dibuat", "creation"]),
                 billing: spResolveKolomAlias(keys, ["billing no", "billing number", "no billing", "nomor billing", "billing", "no faktur", "nomor faktur", "faktur"]),
                 shipment: spResolveKolomAlias(keys, ["shipment no", "shipment number", "no shipment", "nomor shipment", "shipment", "no sj", "surat jalan", "no surat jalan"]),
                 keys: keys
@@ -5556,6 +5595,7 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
                     if (!m) return v;
                     return String(m[2]).padStart(2, "0") + "/" + String(m[1]).padStart(2, "0") + "/20" + m[3];
                 })(val(row, kolom.shipmentDate));
+                const creationDate = spNormTanggal(val(row, kolom.creationDate));
                 const billingNo = val(row, kolom.billing);
                 const shipmentNo = val(row, kolom.shipment);
 
@@ -5575,7 +5615,7 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
                     nomor_order: nomorOrder, nomor_delivery: nomorDelivery,
                     nomor_customer: nomorCustomer, nama_customer: namaCustomer,
                     material: material, description: description, qty: qty,
-                    shipment_date: shipmentDate, billing_no: billingNo, shipment_no: shipmentNo,
+                    shipment_date: shipmentDate, creation_date: creationDate, billing_no: billingNo, shipment_no: shipmentNo,
                     batch_id: batchId, row_no: rowIndex, tanggal_upload: tanggal
                 });
             });
@@ -5615,6 +5655,7 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
                 const belumAdaTabel = /status_pesanan|schema cache|does not exist|sp_selesai_upload/i.test(msg);
                 setUploadStatus(type, "Upload gagal: " + msg, false);
                 alert("Upload Status Pesanan gagal.\n\n" + msg + "\n\n" +
+                    (/creation_date/i.test(msg) ? "Kolom creation_date belum ada di tabel status_pesanan. Jalankan di Supabase SQL Editor:\nALTER TABLE status_pesanan ADD COLUMN IF NOT EXISTS creation_date text;\n\n" : "") +
                     (belumAdaTabel ? "Kemungkinan tabel/fungsi belum dibuat: jalankan file supabase_status_pesanan.sql di Supabase SQL Editor.\n\n" : "") +
                     "Kiriman dari file ini sudah dibatalkan. Data lama tetap aman.");
                 return;
@@ -5624,6 +5665,7 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
             currentPageStatusPesanan = 1;
             const info = "Kolom customer terbaca: No = " + (kolom.custNo || "tidak ditemukan") +
                 ", Nama = " + (kolom.custName || "tidak ditemukan") +
+                " | Kolom Creation Date = " + (kolom.creationDate || "TIDAK DITEMUKAN (cek judul kolom di file)") +
                 (dariDBLain ? " | dilengkapi dari DB Dealer/Shipment: " + fmt(dariDBLain) + " baris" : "") +
                 ((kosongNo || kosongNama) ? " | masih kosong: No " + fmt(kosongNo) + ", Nama " + fmt(kosongNama) + " baris" : "") +
                 ((!kolom.custNo || !kolom.custName) ? " | Sheet dibaca: \"" + (window.__spSheetName || "?") + "\" | Judul kolom di file: " + kolom.keys.slice(0, 40).join(", ") : "");
@@ -6135,6 +6177,7 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
                     const description = val(row, kolom.description);
                     const qty = val(row, kolom.qty);
                     const shipmentDate = val(row, kolom.shipmentDate);
+                    const creationDate = spNormTanggal(val(row, kolom.creationDate));
                     const billingNo = val(row, kolom.billing);
                     const shipmentNo = val(row, kolom.shipment);
 
@@ -6164,6 +6207,7 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
                         description: description,
                         qty: qty,
                         shipment_date: shipmentDate,
+                        creation_date: creationDate,
                         billing_no: billingNo,
                         shipment_no: shipmentNo,
                         // Alias lama tetap dipertahankan agar logika sistem lain tidak rusak.
@@ -7311,7 +7355,7 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
                     for (let from = 0; ; from += 1000) {
                         let q = sb.from('status_pesanan').select('*').in('nomor_customer', chunk);
                         if (term) q = spTerapkanCari(q, term);
-                        if (fTgl && fTgl.vals) q = q.in('shipment_date', fTgl.vals);
+                        if (fTgl && fTgl.vals) q = q.in('creation_date', fTgl.vals);
                         const { data, error } = await q.order('id', { ascending: true }).range(from, from + 999);
                         if (error) return { rows: [], error };
                         (data || []).forEach(r => hasil.push(r));
@@ -7388,7 +7432,7 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
 
         // ============================================================
         // HAPUS STATUS PESANAN PER RENTANG TANGGAL (khusus admin)
-        // Memakai kolom Shipment Date yang tampil di tabel. Tanggal dalam rentang diubah jadi daftar teks
+        // Memakai kolom Creation Date yang tampil di tabel. Tanggal dalam rentang diubah jadi daftar teks
         // (dd/mm/yyyy, plus format lama m/d/yy) lalu dikirim ke server per 40 hari.
         // ============================================================
         function spDaftarTanggal(startIso, endIso) {
@@ -7411,7 +7455,7 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
 
 
         // ============================================================
-        // FILTER TANGGAL (Shipment Date) di tabel Status Pesanan + HAPUS SEMUA
+        // FILTER TANGGAL (Creation Date) di tabel Status Pesanan + HAPUS SEMUA
         // ============================================================
         const SP_FILTER_MAKS_HARI = 120;
 
@@ -7507,7 +7551,7 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
             let total = 0;
             try {
                 for (const vals of kelompok) {
-                    const { count, error } = await sb.from('status_pesanan').select('id', { count: 'exact', head: true }).in('shipment_date', vals);
+                    const { count, error } = await sb.from('status_pesanan').select('id', { count: 'exact', head: true }).in('creation_date', vals);
                     if (error) throw error;
                     total += count || 0;
                 }
@@ -7516,11 +7560,11 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
                 return;
             }
             const tampil = (iso) => formatDateToDisplay(new Date(iso + "T00:00:00"));
-            if (!total) { alert(`Tidak ada pesanan dengan Shipment Date ${tampil(start)} s/d ${tampil(end)}.`); return; }
+            if (!total) { alert(`Tidak ada pesanan dengan Creation Date ${tampil(start)} s/d ${tampil(end)}.`); return; }
 
             const jawab = prompt(
                 `HAPUS ${total.toLocaleString("id-ID")} baris Status Pesanan\n` +
-                `Shipment Date: ${tampil(start)} s/d ${tampil(end)}\n\n` +
+                `Creation Date: ${tampil(start)} s/d ${tampil(end)}\n\n` +
                 `Data yang dihapus tidak bisa dikembalikan.\n\n` +
                 `Ketik HAPUS untuk melanjutkan:`
             );
@@ -7530,7 +7574,7 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
             let terhapus = 0;
             try {
                 for (const vals of kelompok) {
-                    const { count, error } = await sb.from('status_pesanan').delete({ count: 'exact' }).in('shipment_date', vals);
+                    const { count, error } = await sb.from('status_pesanan').delete({ count: 'exact' }).in('creation_date', vals);
                     if (error) throw error;
                     terhapus += count || 0;
                 }
@@ -7615,7 +7659,7 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
             _spTrx = null;
             const seq = ++_spServer.seq;
             if (!tbody.children.length) {
-                tbody.innerHTML = `<tr><td colspan="11" class="empty-state"><i class="fas fa-spinner fa-spin d-block"></i>Memuat data Status Pesanan...</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="12" class="empty-state"><i class="fas fa-spinner fa-spin d-block"></i>Memuat data Status Pesanan...</td></tr>`;
             }
 
             const el = document.getElementById('searchStatusPesanan');
@@ -7626,11 +7670,11 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
             if (term) q = spTerapkanCari(q, term);
             const fTgl = spFilterTanggalVals();
             if (fTgl.error) {
-                tbody.innerHTML = `<tr><td colspan="11" class="empty-state"><i class="fas fa-triangle-exclamation d-block"></i>${dbSafe(fTgl.error)}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="12" class="empty-state"><i class="fas fa-triangle-exclamation d-block"></i>${dbSafe(fTgl.error)}</td></tr>`;
                 renderPaginationStatusPesanan(0);
                 return;
             }
-            if (fTgl.vals) q = q.in('shipment_date', fTgl.vals);
+            if (fTgl.vals) q = q.in('creation_date', fTgl.vals);
             let res;
             try {
                 if (currentRole === 'salespart') {
@@ -7647,7 +7691,7 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
 
             if (res.error) {
                 console.error("Status Pesanan:", res.error);
-                tbody.innerHTML = `<tr><td colspan="11" class="empty-state"><i class="fas fa-triangle-exclamation d-block"></i>${dbSafe(spPesanError(res.error))}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="12" class="empty-state"><i class="fas fa-triangle-exclamation d-block"></i>${dbSafe(spPesanError(res.error))}</td></tr>`;
                 renderPaginationStatusPesanan(0);
                 return;
             }
@@ -7666,7 +7710,7 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
 
             const data = res.data || [];
             if (data.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="11" class="empty-state"><i class="fas fa-clipboard-check d-block"></i>${dbSafe(res.pesan || 'Belum ada data Status Pesanan yang di-upload atau sesuai pencarian.')}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="12" class="empty-state"><i class="fas fa-clipboard-check d-block"></i>${dbSafe(res.pesan || 'Belum ada data Status Pesanan yang di-upload atau sesuai pencarian.')}</td></tr>`;
             } else {
                 tbody.innerHTML = data.map((row) => {
                     const statusText = getStatusPesananText(row);
@@ -7686,6 +7730,7 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
                             <td class="text-start">${dbSafe(row.description || "-")}</td>
                             <td>${dbSafe(row.qty || "-")}</td>
                             <td>${dbSafe(formatDateToDisplay(row.shipment_date || "-"))}</td>
+                            <td>${dbSafe(formatDateToDisplay(row.creation_date || "-"))}</td>
                             <td class="text-success fw-bold">${dbSafe(row.billing_no || "-")}</td>
                             <td class="fw-bold">${dbSafe(row.shipment_no || "-")}</td>
                             <td><span class="badge ${badgeClass} fs-6 py-1 px-3">${dbSafe(statusText)}</span></td>
@@ -7746,7 +7791,7 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
                 } else {
                 for (let from = 0; ; from += LANGKAH) {
                     let qx = sb.from('status_pesanan').select('*');
-                    if (fTglX.vals) qx = qx.in('shipment_date', fTglX.vals);
+                    if (fTglX.vals) qx = qx.in('creation_date', fTglX.vals);
                     const { data, error } = await qx.order('id', { ascending: true }).range(from, from + LANGKAH - 1);
                     if (error) throw error;
                     for (let i = 0; i < data.length; i++) semua.push(data[i]);
@@ -7768,6 +7813,7 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
                     "Description": row.description,
                     "QTY": row.qty,
                     "Shipment Date": row.shipment_date,
+                    "Creation Date": row.creation_date,
                     "Billing No": row.billing_no,
                     "Shipment No": row.shipment_no,
                     "Status": getStatusPesananText(row)
@@ -9118,6 +9164,21 @@ if (_sudahAda) {
             })();
         });
 
+        // Filter Tanggal di menu Surat Jalan Keluar (berdasarkan Tanggal Kirim). Kosong = semua data.
+        function dataKeluarFilter() {
+            let a = (document.getElementById('keluarStart') || {}).value || '';
+            let b = (document.getElementById('keluarEnd') || {}).value || '';
+            if (!a && !b) return transaksiData;
+            if (a && b && a > b) { const t = a; a = b; b = t; }
+            return transaksiData.filter(item => {
+                const d = cleanDateOnly(item.tgl_kirim || item.tgl_kirim_raw);
+                if (!d) return false;
+                if (a && d < a) return false;
+                if (b && d > b) return false;
+                return true;
+            });
+        }
+
         function updateStatistikUI() {
             totalSJ = transaksiData.length;
             totalDO = transaksiData.reduce((sum, item) => sum + (parseInt(item.total) || 0), 0);
@@ -9133,11 +9194,15 @@ if (_sudahAda) {
             const elBK = document.getElementById('statBelumKembali');
             const elDP = document.getElementById('statDalamPengantaran');
 
-            if (elSJ) elSJ.innerText = totalSJ;
-            if (elRace) elRace.innerText = hitungTotalRaceUnique();
-            if (elDO) elDO.innerText = totalDO;
-            if (elBK) elBK.innerText = belumKembali;
-            if (elDP) elDP.innerText = transaksiData.filter(isDalamPengantaran).length;
+            // Angka di kartu mengikuti Filter Tanggal (Tanggal Kirim) di atas; kosong = semua data.
+            const dataTampil = dataKeluarFilter();
+            if (elSJ) elSJ.innerText = dataTampil.length;
+            if (elRace) elRace.innerText = hitungTotalRaceUnique(dataTampil);
+            if (elDO) elDO.innerText = dataTampil.reduce((sum, item) => sum + (parseInt(item.total) || 0), 0);
+            if (elBK) elBK.innerText = dataTampil.filter(item => !isDokOK(item)).length;
+            if (elDP) elDP.innerText = dataTampil.filter(isDalamPengantaran).length;
+            const elInfo = document.getElementById('keluarFilterInfo');
+            if (elInfo) elInfo.innerText = (dataTampil.length !== transaksiData.length) ? `Menampilkan ${dataTampil.length} dari ${transaksiData.length} surat jalan` : '';
             try { muatOSFreegood(); } catch (e) {}
         }
 
@@ -9173,7 +9238,6 @@ if (_sudahAda) {
         const LAP_KATEGORI = ['Dus Oli', 'Dus Ban', 'Dus Part'];
         let chartLapArmadaInstance = null;
         let lapCache = null;
-        let lapHarianCache = null;
 
         function lapKodeCocok(v, list) {
             v = String(v || '').replace(/^D0(?=$|[^A-Z0-9])/, 'DO');   // "D0" (angka nol) disamakan dengan "DO"
@@ -9329,8 +9393,6 @@ if (_sudahAda) {
                     <td>${d.leadN ? lapFmt(lapAvg(d), 1) + ' hari' : '-'}</td></tr>`;
             }).join('') : `<tr><td colspan="6" class="text-muted py-4">Belum ada pengiriman pada ${bn}.</td></tr>`;
 
-            renderLapHarian(ym, bn);
-
             // Grafik
             const ctx = document.getElementById('chartLapArmada');
             if (ctx && typeof Chart !== 'undefined') {
@@ -9346,38 +9408,6 @@ if (_sudahAda) {
                         scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
                 });
             }
-        }
-
-        // ------------------------------------------------------------
-        // RINCIAN HARIAN di Laporan Bulanan
-        // Per tanggal kirim: DO / DS / IK (+ Koli/SP/Lain) yang terantar, total, lead time,
-        // race per armada, outstanding (input harian) dan jumlah surat jalan termasuk SP.
-        // ------------------------------------------------------------
-        function renderLapHarian(ym, bn) {
-            const tbody = document.getElementById('lapTabelHarian');
-            if (!tbody) return;
-            const R = hitungRekapHarian(`${ym}-01`, `${ym}-31`);
-            lapHarianCache = R;
-            const { rows, T } = R;
-            const hari = tgl => new Date(tgl + 'T00:00:00').toLocaleDateString('id-ID', { weekday: 'short' });
-            const outBadge = v => v === null || v === undefined ? '<span class="text-muted">-</span>' : `<span class="badge ${v > 0 ? 'bg-warning text-dark' : 'bg-success'}">${lapFmt(v)}</span>`;
-            const baris = (label, x, isTotal) => {
-                const race = n => isTotal ? x.race[n] : x.race[n].size;
-                const out = isTotal
-                    ? (T.outstandingTerakhir === null ? '-' : `${lapFmt(T.outstandingTerakhir)} <span class="small fw-normal">(terakhir)</span>`)
-                    : outBadge(x.outstanding);
-                return `<tr${isTotal ? ' class="table-active fw-bold"' : ''}>
-                    <td class="text-start fw-bold">${label}</td>
-                    <td>${lapFmt(x.oli)}</td><td>${lapFmt(x.ds)}</td><td>${lapFmt(x.ban)}</td><td>${lapFmt(x.lain)}</td>
-                    <td class="fw-bold">${lapFmt(x.oli + x.ds + x.ban + x.lain)}</td>
-                    <td>${x.leadN ? lapFmt(x.leadSum / x.leadN, 1) + ' hari' : '-'}</td>
-                    <td>${lapFmt(race(LAP_ARMADA[0]))}</td><td>${lapFmt(race(LAP_ARMADA[1]))}</td><td>${lapFmt(race(LAP_ARMADA[2]))}</td>
-                    <td>${out}</td>
-                    <td class="fw-bold">${lapFmt(x.sj)}${x.sp ? ` <span class="small fw-normal text-muted">(${lapFmt(x.sp)} SP)</span>` : ''}</td></tr>`;
-            };
-            tbody.innerHTML = rows.length
-                ? rows.map(r => baris(`${dbSafe(hari(r.tgl))}, ${dbSafe(formatDateToDisplay(r.tgl))}`, r, false)).join('') + baris('TOTAL / RATA-RATA', T, true)
-                : `<tr><td colspan="12" class="text-muted py-4">Belum ada pengiriman pada ${dbSafe(bn || ym)}.</td></tr>`;
         }
 
         // Analisa otomatis berbasis aturan dari data yang tersimpan (tanpa koneksi ke server / API).
@@ -9508,18 +9538,6 @@ if (_sudahAda) {
             add('Per Kode', Object.keys(C.kode).map(k => ({ 'Kode': k, 'Kategori': C.kode[k].kat, 'Surat Jalan': C.kode[k].sj, 'Dus / Koli': C.kode[k].koli })));
             add('Per Driver', Object.keys(C.driver).map(k => C.driver[k]).sort((a, b) => b.race.size - a.race.size).map(d => ({
                 'Driver': d.nama, 'Armada': d.armada, 'Race': d.race.size, 'Surat Jalan': d.sj, 'Dus / Koli': d.koli, 'Rata-rata Lead Time (hari)': +lapAvg(d).toFixed(1) })));
-            const H = lapHarianCache || hitungRekapHarian(`${ym}-01`, `${ym}-31`);
-            const barisH = (label, x, isTotal) => ({
-                'Tanggal': label, 'DO': x.oli, 'DS': x.ds, 'IK': x.ban, 'Lain': x.lain,
-                'Total Terantar (Dus/Koli)': x.oli + x.ds + x.ban + x.lain,
-                'Rata-rata Lead Time (Hari)': x.leadN ? +(x.leadSum / x.leadN).toFixed(1) : '',
-                'Race HSO (Driver Tetap)': isTotal ? x.race[LAP_ARMADA[0]] : x.race[LAP_ARMADA[0]].size,
-                'Race HSO (Driver Tidak Tetap)': isTotal ? x.race[LAP_ARMADA[1]] : x.race[LAP_ARMADA[1]].size,
-                'Race Armada Lain (KGP/JNE)': isTotal ? x.race[LAP_ARMADA[2]] : x.race[LAP_ARMADA[2]].size,
-                'Outstanding Pengantaran': isTotal ? (H.T.outstandingTerakhir === null ? '' : H.T.outstandingTerakhir) : (x.outstanding === null || x.outstanding === undefined ? '' : x.outstanding),
-                'Jumlah Surat Jalan (termasuk SP)': x.sj, 'Di antaranya SP': x.sp
-            });
-            add('Harian', H.rows.map(r => barisH(formatDateToDisplay(r.tgl), r, false)).concat(H.rows.length ? [barisH('TOTAL / RATA-RATA', H.T, true)] : []));
             add('Detail SJ', C.rows);
 
             if (!(currentRole === 'sparepart' || currentRole === 'salespart')) {
@@ -9785,6 +9803,123 @@ if (_sudahAda) {
             XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data), 'Rekap Harian');
             XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(detail.length ? detail : [{ Info: 'Tidak ada data' }]), 'Detail SJ');
             XLSX.writeFile(wb, `Rekap_Harian_${start || 'awal'}_sd_${end || 'akhir'}.xlsx`);
+        }
+
+        // ============================================================
+        // KARTU ARMADA (per Tanggal Kirim & per Driver)
+        // Jumlah surat jalan (termasuk SP), race unik, Oli (DO), Ban (IK), Sparepart (selain itu, termasuk KOLI & SP), dan total.
+        // Aturan kategori & armada sama dengan Laporan Bulanan / Rekap Harian.
+        // ============================================================
+        let kartuCache = null;
+
+        function hitungKartuArmada(start, end, filterDriver) {
+            const tetap = driverTetapSet();
+            const perTgl = {};
+            const semuaDriver = {};
+            const detail = [];
+            const dalamRentang = tgl => tgl && (!start || tgl >= start) && (!end || tgl <= end);
+
+            transaksiUntukRole().forEach(item => {
+                const tgl = cleanDateOnly(item.tgl_kirim || item.tgl_kirim_raw);
+                if (!dalamRentang(tgl)) return;
+                const nama = dbText(namaDriverLaporan(item)) || '(tanpa nama)';
+                const dKey = dbKey(nama);
+                semuaDriver[dKey] = nama;
+                if (filterDriver && dKey !== filterDriver) return;
+
+                const koli = parseInt(item.total) || 0;
+                const kat = lapKategoriKemasan(item);
+                const arm = lapArmadaItem(item, tetap);
+                const race = String(item.race === undefined || item.race === null ? '' : item.race);
+
+                if (!perTgl[tgl]) perTgl[tgl] = {};
+                const b = perTgl[tgl][dKey] || (perTgl[tgl][dKey] = { nama, armada: arm, sj: 0, race: new Set(), oli: 0, ban: 0, part: 0 });
+                b.sj++;
+                b.race.add(race);
+                if (kat === 'Dus Oli') b.oli += koli; else if (kat === 'Dus Ban') b.ban += koli; else b.part += koli;
+
+                detail.push({
+                    'Tgl Kirim': formatDateToDisplay(item.tgl_kirim), 'Driver': nama, 'Armada': arm, 'Race': item.race || '',
+                    'Shipment / SP': item.shipment, 'Dokumen': item.jenis_dokumen || 'SJ', 'Customer': item.nama_dealer || '',
+                    'Jenis Kemasan': item.jenis_kemasan || '', 'Kategori': kat.replace('Dus ', ''), 'Dus / Koli': koli
+                });
+            });
+
+            const T = { sj: 0, race: 0, oli: 0, ban: 0, part: 0, driver: new Set() };
+            const tanggal = Object.keys(perTgl).sort().map(tgl => {
+                const drivers = Object.keys(perTgl[tgl]).map(k => perTgl[tgl][k]).sort((a, b) => a.nama.localeCompare(b.nama));
+                const sub = { sj: 0, race: 0, oli: 0, ban: 0, part: 0 };
+                drivers.forEach(d => {
+                    sub.sj += d.sj; sub.race += d.race.size; sub.oli += d.oli; sub.ban += d.ban; sub.part += d.part;
+                    T.driver.add(dbKey(d.nama));
+                });
+                ['sj', 'race', 'oli', 'ban', 'part'].forEach(k => T[k] += sub[k]);
+                return { tgl, drivers, sub };
+            });
+            return { tanggal, T, detail, semuaDriver, start, end };
+        }
+
+        function muatKartuArmada() {
+            const sEl = document.getElementById('kartuStart'), eEl = document.getElementById('kartuEnd'), dEl = document.getElementById('kartuDriver');
+            if (!sEl || !eEl) return;
+            if (!sEl.value && !eEl.value) { const d = rekapRentangDefault(); sEl.value = d.start; eEl.value = d.end; }
+            if (sEl.value && eEl.value && sEl.value > eEl.value) { alert('Tanggal awal tidak boleh lebih besar dari tanggal akhir.'); return; }
+
+            let pilih = dEl ? dEl.value : '';
+            let R = hitungKartuArmada(sEl.value, eEl.value, pilih);
+            if (pilih && !R.semuaDriver[pilih]) { pilih = ''; R = hitungKartuArmada(sEl.value, eEl.value, ''); }
+            kartuCache = R;
+
+            if (dEl) {
+                dEl.innerHTML = '<option value="">Semua Driver</option>' + Object.keys(R.semuaDriver)
+                    .sort((a, b) => R.semuaDriver[a].localeCompare(R.semuaDriver[b]))
+                    .map(k => `<option value="${dbSafe(k)}"${k === pilih ? ' selected' : ''}>${dbSafe(R.semuaDriver[k])}</option>`).join('');
+            }
+
+            const { tanggal, T } = R;
+            const totalDus = T.oli + T.ban + T.part;
+            document.getElementById('kartuKpi').innerHTML = [
+                { l: 'TOTAL SURAT JALAN', v: lapFmt(T.sj), c: 'primary' },
+                { l: 'TOTAL RACE', v: lapFmt(T.race), c: 'success' },
+                { l: 'TOTAL DUS / KOLI', v: lapFmt(totalDus), c: 'warning' },
+                { l: 'JUMLAH DRIVER', v: lapFmt(T.driver.size), c: 'info' }
+            ].map(k => `<div class="col-xl-3 col-md-6"><div class="card border-start border-4 border-${k.c} bg-white h-100"><div class="card-body">
+                <h6 class="text-muted small fw-bold">${k.l}</h6><h3 class="fw-bold text-${k.c} mb-0">${k.v}</h3></div></div></div>`).join('');
+
+            const hari = tgl => new Date(tgl + 'T00:00:00').toLocaleDateString('id-ID', { weekday: 'short' });
+            const badge = a => `<span class="badge ${a === LAP_ARMADA[0] ? 'bg-primary' : (a === LAP_ARMADA[2] ? 'bg-danger' : 'bg-warning text-dark')}">${dbSafe(a)}</span>`;
+            const angka = x => `<td>${lapFmt(x.sj)}</td><td>${lapFmt(x.race)}</td><td>${lapFmt(x.oli)}</td><td>${lapFmt(x.ban)}</td><td>${lapFmt(x.part)}</td><td class="fw-bold">${lapFmt(x.oli + x.ban + x.part)}</td>`;
+
+            const tbody = document.getElementById('kartuTabel');
+            tbody.innerHTML = tanggal.length ? tanggal.map(g => {
+                const baris = g.drivers.map((d, i) => `<tr>
+                    ${i === 0 ? `<td class="text-start fw-bold bg-light" rowspan="${g.drivers.length + 1}">${dbSafe(hari(g.tgl))}, ${dbSafe(formatDateToDisplay(g.tgl))}</td>` : ''}
+                    <td class="text-start fw-bold">${dbSafe(d.nama)}</td><td>${badge(d.armada)}</td>
+                    ${angka({ sj: d.sj, race: d.race.size, oli: d.oli, ban: d.ban, part: d.part })}</tr>`).join('');
+                return baris + `<tr class="table-active fw-bold"><td class="text-start" colspan="2">Total ${dbSafe(formatDateToDisplay(g.tgl))}</td>${angka(g.sub)}</tr>`;
+            }).join('') + `<tr class="table-dark fw-bold"><td class="text-start" colspan="3">TOTAL KESELURUHAN</td>${angka(T)}</tr>`
+                : '<tr><td colspan="9" class="text-muted py-4">Tidak ada data pengiriman pada rentang tanggal ini.</td></tr>';
+        }
+
+        function eksporKartuArmada() {
+            muatKartuArmada();
+            if (!kartuCache) return;
+            const { tanggal, T, detail, start, end } = kartuCache;
+            if (!tanggal.length) { alert('Tidak ada data untuk diekspor pada rentang tanggal ini.'); return; }
+            const baris = (tgl, nama, arm, x) => ({
+                'Tanggal': tgl, 'Driver': nama, 'Armada': arm, 'Jumlah Surat Jalan': x.sj, 'Race': x.race,
+                'Oli (Dus)': x.oli, 'Ban (Dus)': x.ban, 'Sparepart (Dus/Koli)': x.part, 'Total (Dus/Koli)': x.oli + x.ban + x.part
+            });
+            const data = [];
+            tanggal.forEach(g => {
+                g.drivers.forEach(d => data.push(baris(formatDateToDisplay(g.tgl), d.nama, d.armada, { sj: d.sj, race: d.race.size, oli: d.oli, ban: d.ban, part: d.part })));
+                data.push(baris(formatDateToDisplay(g.tgl), 'TOTAL TANGGAL', '', g.sub));
+            });
+            data.push(baris('TOTAL KESELURUHAN', '', '', T));
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data), 'Kartu Armada');
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(detail.length ? detail : [{ Info: 'Tidak ada data' }]), 'Detail SJ');
+            XLSX.writeFile(wb, `Kartu_Armada_${start || 'awal'}_sd_${end || 'akhir'}.xlsx`);
         }
 
         function initDashboardCharts() {
