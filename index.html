@@ -812,6 +812,11 @@
                         <i class="fas fa-truck-loading"></i><span>Surat Jalan Keluar</span>
                     </button>
                 </li>
+                <li class="nav-item role-menu wh-access admin-only sp-access" role="presentation">
+                    <button class="nav-link w-100 text-start" data-bs-toggle="pill" data-bs-target="#menu-input-po" type="button" role="tab" onclick="renderInputPO()">
+                        <i class="fas fa-file-invoice"></i><span>Input PO</span>
+                    </button>
+                </li>
                 <li class="nav-item role-menu admin-dealer report-access" role="presentation">
                     <button class="nav-link w-100 text-start" data-bs-toggle="pill" data-bs-target="#menu-laporan" type="button" role="tab" onclick="renderLaporanUlang()">
                         <i class="fas fa-file-alt"></i><span>Laporan Pengiriman</span>
@@ -1037,6 +1042,11 @@
                                         <label for="global_race" class="form-label fw-bold small">Race <span class="text-danger">*</span></label>
                                         <input type="number" class="form-control" id="global_race" value="1" min="1" required>
                                     </div>
+                                    <div class="col-md-3">
+                                        <label for="global_checker" class="form-label fw-bold small">Checker</label>
+                                        <input type="text" class="form-control" id="global_checker" list="listChecker" placeholder="Nama checker..." autocomplete="off">
+                                        <datalist id="listChecker"></datalist>
+                                    </div>
                                     <div class="col-md-3" id="boxOutstanding">
                                         <label for="global_outstanding" class="form-label fw-bold small">Outstanding Pengantaran</label>
                                         <div id="outstandingInputWrap">
@@ -1136,6 +1146,69 @@
                 </div>
 
                 <!-- 2. MENU LAPORAN PENGIRIMAN -->
+                <!-- MENU INPUT PO (Admin, Warehouse, Sparepart) -->
+                <div class="tab-pane fade" id="menu-input-po" role="tabpanel">
+                    <div class="card shadow-sm border-0 mb-4 border-start border-primary border-4">
+                        <div class="card-header bg-white py-3">
+                            <h5 class="mb-0 text-dark fw-bold"><i class="fas fa-file-invoice text-primary me-2"></i>Input PO</h5>
+                            <div class="small text-muted mt-1">Nama Dealer di sini otomatis dipakai di menu Status Pesanan untuk Nomor Delivery yang sama.</div>
+                        </div>
+                        <div class="card-body p-4">
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <label for="po_delivery" class="form-label fw-bold small">Nomor Delivery <span class="text-danger">*</span> <span class="text-muted fw-normal">(boleh banyak)</span></label>
+                                    <textarea class="form-control" id="po_delivery" rows="4" placeholder="Ketik/tempel banyak nomor. Pisahkan dengan Enter, koma, atau spasi." oninput="poHitungDelivery()"></textarea>
+                                    <div class="form-text" id="po_delivery_info">0 nomor delivery</div>
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="po_dealer" class="form-label fw-bold small">Nama Dealer <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" id="po_dealer" list="listPODealer" placeholder="Ketik nama / nomor customer, lalu pilih..." autocomplete="off" oninput="poDealerBerubah('po_dealer','po_custno','po_cust_info')">
+                                    <datalist id="listPODealer"></datalist>
+                                    <div class="input-group input-group-sm mt-2">
+                                        <span class="input-group-text">No. Customer</span>
+                                        <input type="text" class="form-control" id="po_custno" placeholder="Otomatis terisi dari dealer" autocomplete="off" oninput="this.dataset.auto=''">
+                                    </div>
+                                    <div class="form-text" id="po_cust_info">Cari dealer dengan nama ATAU nomor customer. Dealer belum ada di database? Ketik manual saja.</div>
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="po_program" class="form-label fw-bold small">Nama Program <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" id="po_program" list="listPOProgram" placeholder="Nama program..." autocomplete="off">
+                                    <datalist id="listPOProgram"></datalist>
+                                </div>
+                            </div>
+                            <div class="mt-3 d-flex gap-2">
+                                <button type="button" class="btn btn-primary fw-bold" onclick="simpanInputPO()"><i class="fas fa-save me-1"></i> Simpan</button>
+                                <button type="button" class="btn btn-outline-secondary" onclick="resetFormInputPO()"><i class="fas fa-rotate-left me-1"></i> Kosongkan</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card shadow-sm border-0">
+                        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                            <h6 class="mb-0 fw-bold"><i class="fas fa-list me-2 text-primary"></i>Daftar Input PO <span class="badge bg-primary ms-1" id="poTotalBadge">0</span></h6>
+                            <div class="input-group input-group-sm" style="max-width:320px;">
+                                <span class="input-group-text bg-light"><i class="fas fa-search"></i></span>
+                                <input type="text" class="form-control" id="poSearch" placeholder="Cari delivery / dealer / program..." oninput="poPage=1; renderInputPO()">
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-bordered table-striped align-middle text-center">
+                                    <thead class="table-dark"><tr><th>No</th><th>Nomor Delivery</th><th>Nomor Customer</th><th>Nama Dealer</th><th>Nama Program</th><th>Diinput Oleh</th><th>Waktu Input</th><th>Aksi</th></tr></thead>
+                                    <tbody id="tabelInputPO"></tbody>
+                                </table>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center mt-3">
+                                <span class="text-muted small" id="poPageInfo"></span>
+                                <div class="btn-group btn-group-sm">
+                                    <button type="button" class="btn btn-outline-secondary" onclick="poGantiHalaman(-1)"><i class="fas fa-chevron-left"></i></button>
+                                    <button type="button" class="btn btn-outline-secondary" onclick="poGantiHalaman(1)"><i class="fas fa-chevron-right"></i></button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="tab-pane fade" id="menu-laporan" role="tabpanel">
                     <div class="card shadow-sm border-0 mt-2">
                         <div class="card-header bg-white text-dark py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
@@ -2310,6 +2383,10 @@
                         <input type="number" class="form-control" id="editRace" min="1">
                     </div>
                     <div class="mb-3">
+                        <label class="form-label fw-bold small">Checker</label>
+                        <input type="text" class="form-control" id="editChecker" list="listChecker" autocomplete="off">
+                    </div>
+                    <div class="mb-3">
                         <label class="form-label fw-bold small">Isi Barang / Nama Program</label>
                         <input type="text" class="form-control" id="editIsiBarang">
                     </div>
@@ -2356,6 +2433,23 @@
                         </table>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL EDIT INPUT PO -->
+    <div class="modal fade" id="modalEditPO" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header"><h5 class="modal-title fw-bold"><i class="fas fa-edit me-2 text-warning"></i>Edit Input PO</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body">
+                    <input type="hidden" id="editPOId">
+                    <div class="mb-3"><label class="form-label fw-bold small">Nomor Delivery</label><input type="text" class="form-control" id="editPODelivery"></div>
+                    <div class="mb-3"><label class="form-label fw-bold small">Nama Dealer</label><input type="text" class="form-control" id="editPODealer" list="listPODealer" autocomplete="off" oninput="poDealerBerubah('editPODealer','editPOCustNo','editPOCustInfo')"></div>
+                    <div class="mb-3"><label class="form-label fw-bold small">Nomor Customer</label><input type="text" class="form-control" id="editPOCustNo" autocomplete="off" oninput="this.dataset.auto=''"><div class="form-text" id="editPOCustInfo"></div></div>
+                    <div class="mb-3"><label class="form-label fw-bold small">Nama Program</label><input type="text" class="form-control" id="editPOProgram" list="listPOProgram" autocomplete="off"></div>
+                </div>
+                <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button><button type="button" class="btn btn-primary fw-bold" onclick="simpanEditPO()">Simpan Perubahan</button></div>
             </div>
         </div>
     </div>
@@ -2865,7 +2959,8 @@ window.demoBoot = async function () {
         'gudang_driver_gps', 'gudang_db_shipment', 'gudang_db_dealer_ekspedisi', 'gudang_db_dealer_list_raw',
         'gudang_db_giso', 'gudang_db_faktur_raw', 'gudang_db_sp',
         'gudang_shipment_terinput', 'gudang_transaksi', 'gudang_pengembalian_sj',
-        'gudang_total_sj', 'gudang_total_do', 'gudang_belum_kembali', 'gudang_outstanding_harian'
+        'gudang_total_sj', 'gudang_total_do', 'gudang_belum_kembali', 'gudang_outstanding_harian',
+        'gudang_input_po'
     ];
     // Key yang boleh ditulis role driver (harus sama dengan policy di supabase_setup.sql)
     const DRIVER_KEYS = [
@@ -2873,7 +2968,9 @@ window.demoBoot = async function () {
         'gudang_total_sj', 'gudang_total_do', 'gudang_belum_kembali'
     ];
     // Key yang boleh ditulis role warehouse (harus sama dengan policy di supabase_warehouse.sql)
-    const WAREHOUSE_KEYS = DRIVER_KEYS.concat(['gudang_outstanding_harian']);
+    const WAREHOUSE_KEYS = DRIVER_KEYS.concat(['gudang_outstanding_harian', 'gudang_input_po']);
+    // Key yang boleh ditulis role sparepart (Input PO) - harus sama dengan policy di supabase_input_po.sql
+    const SPAREPART_KEYS = ['gudang_input_po'];
     // Sesi login per-perangkat (tetap di localStorage, tidak dikirim ke server)
     const SESI_LOKAL_KEYS = [
         'gudang_current_role', 'gudang_current_dealer', 'gudang_current_dealer_username',
@@ -3078,6 +3175,7 @@ window.demoBoot = async function () {
         if (r === 'admin') return SHARED_KEYS.includes(key);
         if (r === 'driver') return DRIVER_KEYS.includes(key);
         if (r === 'warehouse') return WAREHOUSE_KEYS.includes(key);
+        if (r === 'sparepart') return SPAREPART_KEYS.includes(key);
         return false;
     }
 
@@ -3330,7 +3428,7 @@ window.demoBoot = async function () {
         try {
             lsSet(TX_KEY, s); lastSynced[TX_KEY] = s;
             try { VAR_SETTERS[TX_KEY](arr); } catch (e) { console.warn('setter transaksi', e); }
-            ['refreshAfterDatabaseChange', 'muatTabelDriverPOD', 'muatRekapHarian'].forEach(fn => {
+            ['refreshAfterDatabaseChange', 'muatTabelDriverPOD', 'muatRekapHarian', 'renderInputPO'].forEach(fn => {
                 try { if (typeof window[fn] === 'function') window[fn](); } catch (e) {}
             });
         } finally { applyingRemote = false; }
@@ -3617,7 +3715,8 @@ window.demoBoot = async function () {
         gudang_total_sj: v => { totalSJ = parseInt(v) || 0; },
         gudang_total_do: v => { totalDO = parseInt(v) || 0; },
         gudang_belum_kembali: v => { belumKembali = parseInt(v) || 0; },
-        gudang_outstanding_harian: v => { outstandingHarian = v || {}; }
+        gudang_outstanding_harian: v => { outstandingHarian = v || {}; },
+        gudang_input_po: v => { inputPO = Array.isArray(v) ? v : []; }
     };
     const antrianRefresh = new Set();
     let refreshTimer = null;
@@ -3649,7 +3748,7 @@ window.demoBoot = async function () {
                 else { const s = JSON.stringify(v); lsSet(key, s); lastSynced[key] = s; }
                 try { VAR_SETTERS[key](v); } catch (e) { console.warn('setter', key, e); }
             });
-            ['refreshAfterDatabaseChange', 'muatTabelDriverPOD', 'muatRekapHarian'].forEach(fn => {
+            ['refreshAfterDatabaseChange', 'muatTabelDriverPOD', 'muatRekapHarian', 'renderInputPO'].forEach(fn => {
                 try { if (typeof window[fn] === 'function') window[fn](); } catch (e) {}
             });
         } finally { applyingRemote = false; }
@@ -3804,6 +3903,7 @@ window.demoBoot = async function () {
         let currentPageDBDealer = 1;
         let currentPageDBGISO = 1;
         let currentPageStatusPesanan = 1;
+        let inputPO = JSON.parse(localStorage.getItem('gudang_input_po')) || [];
         let _spServer = { total: 0, totalAll: 0, seq: 0 };   // Status Pesanan dibaca dari tabel Supabase status_pesanan
         const rowsPerPage = 25;
 
@@ -4901,6 +5001,7 @@ window.demoBoot = async function () {
 
             document.getElementById('loginWrapper').style.display = 'none';
             document.getElementById('appContainer').style.display = 'block';
+            try { segarkanDaftarChecker(); } catch (e) {}
 
             let adminEls = document.querySelectorAll('.admin-only');
             let driverEls = document.querySelectorAll('.driver-only');
@@ -4963,6 +5064,8 @@ window.demoBoot = async function () {
         document.getElementById('global_driver').value = persistentSession.driver || "";
         segarkanPilihanPlat('global_plat', persistentSession.plat || "");
         document.getElementById('global_race').value = persistentSession.race || 1;
+        document.getElementById('global_checker').value = persistentSession.checker || '';
+        try { segarkanDaftarChecker(); } catch (e) {}
 
         document.getElementById('global_tgl_kirim').addEventListener('change', function() {
             persistentSession.tgl_kirim = this.value;
@@ -4982,6 +5085,10 @@ window.demoBoot = async function () {
         });
         document.getElementById('global_race').addEventListener('input', function() {
             persistentSession.race = this.value;
+            localStorage.setItem('gudang_persistent_session', JSON.stringify(persistentSession));
+        });
+        document.getElementById('global_checker').addEventListener('input', function() {
+            persistentSession.checker = this.value;
             localStorage.setItem('gudang_persistent_session', JSON.stringify(persistentSession));
         });
 
@@ -5353,6 +5460,7 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
                 "Driver": x.driver || "",
                 "Plat": x.plat || "",
                 "Race": x.race || "",
+                "Checker": x.checker || "",
                 "Koli": x.total || 0,
                 "Status": statusText,
                 "Keterangan": x.ket_belum_kembali || ""
@@ -6478,7 +6586,7 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
             }
             const { error: errSP } = await sb.from('status_pesanan').delete().gt('id', 0);
             if (errSP && !/status_pesanan|schema cache|does not exist/i.test(errSP.message || '')) { alert('Gagal menghapus Status Pesanan di server: ' + errSP.message); return; }
-            const { error: errReset } = await sb.from('app_store').delete().in('key', SHARED_KEYS);
+            const { error: errReset } = await sb.from('app_store').delete().in('key', SHARED_KEYS.filter(k => k !== 'gudang_input_po'));
             if (errReset) { alert('Gagal menghapus data di server: ' + errReset.message); return; }
             keys.forEach(k => localStorage.removeItem(k));
             location.reload();
@@ -7071,6 +7179,7 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
                 "Koli":x.total||0,
                 "Driver":x.driver||"",
                 Race:x.race||"",
+                Checker:x.checker||"",
                 "Lead Time":hitungLeadTimeLive(x),
                 KET:isDokOK(x)?"OK":"BELUM KEMBALI",
                 "Keterangan Belum Kembali":x.ket_belum_kembali||""
@@ -7243,9 +7352,18 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
                     String(i.shipment || "").toLowerCase().includes(keyword) ||
                     String(i.nama_dealer || "").toLowerCase().includes(keyword) ||
                     String(i.expedisi || "").toLowerCase().includes(keyword) ||
-                    String(i.isi_barang || "").toLowerCase().includes(keyword)
+                    String(i.isi_barang || "").toLowerCase().includes(keyword) ||
+                    String(i.checker || "").toLowerCase().includes(keyword)
                 );
             }
+            // Urut dari yang terbaru: tanggal kirim terbaru dulu, lalu waktu input terbaru.
+            // (sort stabil: data tanpa waktu input tetap mengikuti urutan aslinya)
+            data = data.slice().sort((a, b) => {
+                const ta = cleanDateOnly(a.tgl_kirim_raw || a.tgl_kirim) || '';
+                const tb = cleanDateOnly(b.tgl_kirim_raw || b.tgl_kirim) || '';
+                if (ta !== tb) return ta < tb ? 1 : -1;
+                return (Number(b.dibuat_at) || 0) - (Number(a.dibuat_at) || 0);
+            });
             return data;
         }
 
@@ -7629,7 +7747,7 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
             const totalQty = semua.reduce((n, r) => n + angka(r.qty), 0);
             const f = semua[0];
             ringkas.innerHTML =
-                `<b>Customer:</b> ${dbSafe(f.nomor_customer || '-')} - ${dbSafe(f.nama_customer || '-')} &nbsp;•&nbsp; ` +
+                `<b>Customer:</b> ${dbSafe(noCustomerStatus(f))} - ${dbSafe(namaCustomerStatus(f))} &nbsp;•&nbsp; ` +
                 `<b>Jumlah baris part:</b> ${semua.length.toLocaleString('id-ID')} &nbsp;•&nbsp; ` +
                 `<b>Total QTY:</b> ${totalQty.toLocaleString('id-ID')}`;
 
@@ -7724,8 +7842,8 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
                         <tr>
                             <td class="fw-bold">${row.nomor_order ? `<a href="#" class="text-primary text-decoration-none" title="Klik untuk lihat semua part number di order ini" onclick="event.preventDefault(); spBukaDetailOrder(decodeURIComponent('${encodeURIComponent(row.nomor_order)}'))">${dbSafe(row.nomor_order)}</a>` : "-"}</td>
                             <td>${dbSafe(row.nomor_delivery || "-")}</td>
-                            <td>${dbSafe(row.nomor_customer || "-")}</td>
-                            <td>${dbSafe(row.nama_customer || "-")}</td>
+                            <td>${dbSafe(noCustomerStatus(row))}</td>
+                            <td>${dbSafe(namaCustomerStatus(row))}</td>
                             <td>${dbSafe(row.material || "-")}</td>
                             <td class="text-start">${dbSafe(row.description || "-")}</td>
                             <td>${dbSafe(row.qty || "-")}</td>
@@ -7807,8 +7925,8 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
                 const dataExport = semua.map((row) => ({
                     "Nomor Order": row.nomor_order,
                     "Nomor Delivery": row.nomor_delivery,
-                    "Nomor Customer": row.nomor_customer,
-                    "Nama Customer": row.nama_customer,
+                    "Nomor Customer": noCustomerStatus(row),
+                    "Nama Customer": namaCustomerStatus(row),
                     "Material": row.material,
                     "Description": row.description,
                     "QTY": row.qty,
@@ -7887,6 +8005,7 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
                         <th>Koli</th>
                         <th>Driver (Armada Astra)</th>
                         <th>Race</th>
+                        <th>Checker</th>
                         <th>Lead Time</th>
                         <th>KET</th>
                         <th>Status / Live Lokasi</th>
@@ -7932,6 +8051,7 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
                         <td><span class="badge bg-primary">${item.total}</span></td>
                         <td>${item.driver}</td>
                         <td>${item.race}</td>
+                        <td>${dbSafe(item.checker || '-')}</td>
                         <td><span class="badge bg-danger">${displayLeadTime} Hari</span></td>
                         <td>${statusKetBadge}</td>
                         <td>${statusKolomHTML}</td>
@@ -7945,7 +8065,7 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
             }
 
             if (dataFilter.length === 0) {
-                let colSpanCount = currentRole === 'dealer' ? 7 : ((currentRole === 'sparepart' || currentRole === 'salespart') ? 13 : 14);
+                let colSpanCount = currentRole === 'dealer' ? 7 : ((currentRole === 'sparepart' || currentRole === 'salespart') ? 14 : 15);
                 tbody.innerHTML = `<tr><td colspan="${colSpanCount}" class="text-muted py-4">Tidak ada data laporan ditemukan.</td></tr>`;
             }
 
@@ -7965,6 +8085,7 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
             document.getElementById('editDriver').value = item.driver;
             segarkanPilihanPlat('editPlat', item.plat || platOtomatis(item.driver));
             document.getElementById('editRace').value = item.race;
+            document.getElementById('editChecker').value = item.checker || '';
             document.getElementById('editIsiBarang').value = item.isi_barang || '';
             document.getElementById('editStatus').value = item.status;
             document.getElementById('editKeterangan').value = item.ket_belum_kembali || '';
@@ -7990,6 +8111,7 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
             item.plat = platBaru;
             item.tanpa_foto = !tetapBaru || isSPRangka(item);
             item.race = document.getElementById('editRace').value;
+            item.checker = document.getElementById('editChecker').value.trim().toUpperCase();
             item.isi_barang = document.getElementById('editIsiBarang').value.trim();
             item.ket_belum_kembali = document.getElementById('editKeterangan').value.trim();
             
@@ -8951,6 +9073,7 @@ if (_sudahAda) {
                 plat: platVal,
                 tanpa_foto: tanpaFoto,
                 race: raceVal,
+                checker: (document.getElementById('global_checker').value || '').trim().toUpperCase(),
                 shipment: shipmentVal,
                 jenis_dokumen: isSP ? 'SP' : 'SJ',
                 isi_barang: document.getElementById('isi_barang').value.trim(),
@@ -9002,6 +9125,7 @@ if (_sudahAda) {
                 document.getElementById('lead_time_preview').value = '0 Hari';
             }
 
+            try { segarkanDaftarChecker(); } catch (e) {}
             updateStatistikUI();
             try { renderLaporanUlang(); } catch (e) {}
             try { muatDataOutstanding(); } catch (e) {}
@@ -9554,6 +9678,236 @@ if (_sudahAda) {
         // OUTSTANDING PENGANTARAN HARIAN (diisi di Form Input Surat Jalan Keluar)
         // Disimpan per Tanggal Kirim, dipakai oleh menu Rekap Harian.
         // ============================================================
+        // ============================================================
+        // INPUT PO (Admin, Warehouse, Sparepart)
+        // Nomor Delivery (boleh banyak) + Nama Dealer + Nama Program.
+        // Nama Dealer dari sini dipakai di menu Status Pesanan (cocok lewat Nomor Delivery).
+        // Disimpan sebagai data bersama: key 'gudang_input_po'.
+        // ============================================================
+        let poPage = 1;
+        const PO_PER_HALAMAN = 25;
+
+        function poBoleh() { return ['admin', 'warehouse', 'sparepart'].includes(currentRole); }
+        function poNormDelivery(v) { return dbText(v).toUpperCase().replace(/\s+/g, ''); }
+        // kunci pencocokan: abaikan nol di depan (SAP kadang menambah 00 di depan)
+        function poKunci(v) { return poNormDelivery(v).replace(/^0+/, ''); }
+        function poPecahDelivery(teks) {
+            const seen = new Set(), out = [];
+            String(teks || '').split(/[\s,;]+/).forEach(x => {
+                const n = poNormDelivery(x);
+                if (n && !seen.has(n)) { seen.add(n); out.push(n); }
+            });
+            return out;
+        }
+        function poHitungDelivery() {
+            const el = document.getElementById('po_delivery_info');
+            if (el) el.textContent = poPecahDelivery(document.getElementById('po_delivery').value).length + ' nomor delivery';
+        }
+
+        let _poMapCache = null, _poMapRef = null;
+        function poPeta() {
+            if (_poMapRef !== inputPO || !_poMapCache) {
+                const m = new Map();
+                (inputPO || []).forEach(x => { const k = poKunci(x.delivery); if (k) m.set(k, x); });
+                _poMapCache = m; _poMapRef = inputPO;
+            }
+            return _poMapCache;
+        }
+        // Nama customer yang dipakai di Status Pesanan: dari Input PO bila Nomor Delivery-nya ada.
+        function noCustomerStatus(row) {
+            try {
+                const k = poKunci(row && row.nomor_delivery);
+                if (k) { const po = poPeta().get(k); if (po && dbText(po.customer_no)) return po.customer_no; }
+            } catch (e) {}
+            return (row && row.nomor_customer) || '-';
+        }
+        function namaCustomerStatus(row) {
+            try {
+                const k = poKunci(row && row.nomor_delivery);
+                if (k) { const po = poPeta().get(k); if (po && dbText(po.dealer)) return po.dealer; }
+            } catch (e) {}
+            return (row && row.nama_customer) || '-';
+        }
+
+        // Cari dealer di DB Dealer lewat nama ATAU nomor customer
+        function poCariDealerDB(teks) {
+            const k = dbKey(teks);
+            if (!k) return null;
+            for (const x of (databaseDealerListRaw || [])) {
+                const f = getDealerMasterFields(x);
+                if ((f.dealerName && dbKey(f.dealerName) === k) || (f.customerNo && dbKey(f.customerNo) === k)) return { no: f.customerNo, nama: f.dealerName };
+            }
+            return null;
+        }
+        function poDealerBerubah(idDealer, idNo, idInfo) {
+            const inD = document.getElementById(idDealer), inN = document.getElementById(idNo), info = document.getElementById(idInfo);
+            if (!inD || !inN) return;
+            const h = poCariDealerDB(inD.value);
+            if (h) {
+                if (dbKey(inD.value) !== dbKey(h.nama)) inD.value = h.nama;   // mengetik nomor customer -> nama terisi otomatis
+                inN.value = h.no || ''; inN.dataset.auto = '1';
+                if (info) info.innerHTML = `<span class="text-success"><i class="fas fa-check-circle me-1"></i>Ada di database: ${dbSafe(h.no || '(tanpa nomor)')}</span>`;
+            } else {
+                if (inN.dataset.auto === '1') { inN.value = ''; inN.dataset.auto = ''; }
+                if (info) info.innerHTML = dbText(inD.value) ? '<span class="text-warning-emphasis"><i class="fas fa-pen me-1"></i>Tidak ada di database. Nama dipakai apa adanya; Nomor Customer boleh diisi manual atau dikosongkan.</span>' : 'Cari dealer dengan nama ATAU nomor customer. Dealer belum ada di database? Ketik manual saja.';
+            }
+        }
+
+        function poIsiDaftarPilihan() {
+            const dl = document.getElementById('listPODealer');
+            if (dl) {
+                const peta = new Map();
+                (databaseDealerListRaw || []).forEach(x => { const f = getDealerMasterFields(x); if (f.dealerName && !peta.has(f.dealerName)) peta.set(f.dealerName, f.customerNo); });
+                dl.innerHTML = [...peta.keys()].sort((a, b) => a.localeCompare(b)).map(n => `<option value="${dbSafe(n)}" label="${dbSafe(peta.get(n) || '')}"></option>`).join('');
+            }
+            const dp = document.getElementById('listPOProgram');
+            if (dp) {
+                const set = new Set();
+                (inputPO || []).forEach(x => { const n = dbText(x.program); if (n) set.add(n); });
+                dp.innerHTML = [...set].sort((a, b) => a.localeCompare(b)).map(n => `<option value="${dbSafe(n)}"></option>`).join('');
+            }
+        }
+
+        function poSimpanKeStorage() {
+            _poMapCache = null;
+            localStorage.setItem('gudang_input_po', JSON.stringify(inputPO));
+            try { if (document.getElementById('menu-status-pesanan').classList.contains('active')) muatDataStatusPesanan(); } catch (e) {}
+        }
+
+        function resetFormInputPO() {
+            ['po_delivery', 'po_dealer', 'po_program', 'po_custno'].forEach(id => { const el = document.getElementById(id); if (el) { el.value = ''; el.dataset.auto = ''; } });
+            try { poDealerBerubah('po_dealer', 'po_custno', 'po_cust_info'); } catch (e) {}
+            poHitungDelivery();
+        }
+
+        function simpanInputPO() {
+            if (!poBoleh()) { alert('Menu ini hanya untuk Admin, Warehouse, dan Sparepart.'); return; }
+            const daftar = poPecahDelivery(document.getElementById('po_delivery').value);
+            const dealer = dbText(document.getElementById('po_dealer').value);
+            const custNo = dbText(document.getElementById('po_custno').value);
+            const program = dbText(document.getElementById('po_program').value);
+            if (!daftar.length) { alert('Isi minimal 1 Nomor Delivery!'); document.getElementById('po_delivery').focus(); return; }
+            if (!dealer) { alert('Isi Nama Dealer!'); document.getElementById('po_dealer').focus(); return; }
+            if (!program) { alert('Isi Nama Program!'); document.getElementById('po_program').focus(); return; }
+
+            const ada = poPeta();
+            const baru = [], dobel = [];
+            const sekarang = Date.now();
+            daftar.forEach((d, i) => {
+                if (ada.has(poKunci(d))) { dobel.push(d); return; }
+                baru.push({
+                    id: sekarang.toString(36) + '_' + i + '_' + Math.random().toString(36).slice(2, 6),
+                    delivery: d, dealer: dealer, customer_no: custNo, program: program,
+                    dibuat_oleh: currentUsername || currentRole, dibuat_at: sekarang + i, diubah_at: null
+                });
+            });
+            if (!baru.length) {
+                alert('Semua nomor delivery sudah pernah diinput:\n' + dobel.slice(0, 15).join(', ') + (dobel.length > 15 ? ' ...' : '') + '\n\nGunakan tombol Edit di daftar bila ingin mengubahnya.');
+                return;
+            }
+            // yang terbaru di atas
+            inputPO = baru.reverse().concat(inputPO || []);
+            poSimpanKeStorage();
+            resetFormInputPO();
+            poPage = 1;
+            renderInputPO();
+            alert(`${baru.length} nomor delivery berhasil disimpan.` + (dobel.length ? `\n\nDilewati karena sudah ada (${dobel.length}): ` + dobel.slice(0, 15).join(', ') + (dobel.length > 15 ? ' ...' : '') : ''));
+        }
+
+        function poDataTersaring() {
+            const kw = dbKey((document.getElementById('poSearch') || {}).value || '');
+            const arr = (inputPO || []).slice().sort((a, b) => (Number(b.dibuat_at) || 0) - (Number(a.dibuat_at) || 0));
+            if (!kw) return arr;
+            return arr.filter(x => dbKey(x.delivery).includes(kw) || dbKey(x.customer_no).includes(kw) || dbKey(x.dealer).includes(kw) || dbKey(x.program).includes(kw));
+        }
+
+        function renderInputPO() {
+            const tbody = document.getElementById('tabelInputPO');
+            if (!tbody) return;
+            poIsiDaftarPilihan();
+            const data = poDataTersaring();
+            const totalHal = Math.max(1, Math.ceil(data.length / PO_PER_HALAMAN));
+            if (poPage > totalHal) poPage = totalHal;
+            if (poPage < 1) poPage = 1;
+            const mulai = (poPage - 1) * PO_PER_HALAMAN;
+            const bagian = data.slice(mulai, mulai + PO_PER_HALAMAN);
+            const badge = document.getElementById('poTotalBadge'); if (badge) badge.textContent = (inputPO || []).length;
+            if (!bagian.length) {
+                tbody.innerHTML = `<tr><td colspan="8" class="text-muted py-4">Belum ada data Input PO.</td></tr>`;
+            } else {
+                tbody.innerHTML = bagian.map((x, i) => {
+                    const waktu = x.dibuat_at ? new Date(Number(x.dibuat_at)).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' }) : '-';
+                    const idAman = String(x.id).replace(/'/g, '');
+                    return `<tr>
+                        <td>${mulai + i + 1}</td>
+                        <td class="fw-bold text-primary">${dbSafe(x.delivery)}</td>
+                        <td>${dbSafe(x.customer_no || '-')}</td>
+                        <td class="text-start">${dbSafe(x.dealer)}</td>
+                        <td class="text-start">${dbSafe(x.program)}</td>
+                        <td>${dbSafe(x.dibuat_oleh || '-')}</td>
+                        <td>${dbSafe(waktu)}${x.diubah_at ? ' <span class="badge bg-light text-secondary border">diedit</span>' : ''}</td>
+                        <td>
+                            <button class="btn btn-sm btn-warning py-0 px-2 text-dark fw-bold mb-1 shadow-sm" onclick="bukaEditPO('${idAman}')" title="Edit"><i class="fas fa-edit"></i></button>
+                            <button class="btn btn-sm btn-danger py-0 px-2 fw-bold mb-1 shadow-sm" onclick="hapusInputPO('${idAman}')" title="Hapus"><i class="fas fa-trash"></i></button>
+                        </td></tr>`;
+                }).join('');
+            }
+            const info = document.getElementById('poPageInfo');
+            if (info) info.textContent = data.length ? `Menampilkan ${mulai + 1} - ${Math.min(mulai + PO_PER_HALAMAN, data.length)} dari ${data.length} data` : 'Menampilkan 0 data';
+        }
+        function poGantiHalaman(d) { poPage += d; renderInputPO(); }
+
+        function bukaEditPO(id) {
+            const x = (inputPO || []).find(r => String(r.id) === String(id));
+            if (!x) return;
+            poIsiDaftarPilihan();
+            document.getElementById('editPOId').value = x.id;
+            document.getElementById('editPODelivery').value = x.delivery;
+            document.getElementById('editPODealer').value = x.dealer;
+            document.getElementById('editPOProgram').value = x.program;
+            const en = document.getElementById('editPOCustNo'); en.value = x.customer_no || ''; en.dataset.auto = '';
+            document.getElementById('editPOCustInfo').textContent = '';
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('modalEditPO')).show();
+        }
+        function simpanEditPO() {
+            if (!poBoleh()) return;
+            const id = document.getElementById('editPOId').value;
+            const x = (inputPO || []).find(r => String(r.id) === String(id));
+            if (!x) return;
+            const delivery = poNormDelivery(document.getElementById('editPODelivery').value);
+            const dealer = dbText(document.getElementById('editPODealer').value);
+            const program = dbText(document.getElementById('editPOProgram').value);
+            const custNoBaru = dbText(document.getElementById('editPOCustNo').value);
+            if (!delivery || !dealer || !program) { alert('Nomor Delivery, Nama Dealer, dan Nama Program wajib diisi!'); return; }
+            const bentrok = (inputPO || []).some(r => String(r.id) !== String(id) && poKunci(r.delivery) === poKunci(delivery));
+            if (bentrok) { alert('Nomor Delivery ' + delivery + ' sudah ada di daftar Input PO.'); return; }
+            x.delivery = delivery; x.dealer = dealer; x.customer_no = custNoBaru; x.program = program; x.diubah_at = Date.now();
+            inputPO = inputPO.slice();
+            poSimpanKeStorage();
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('modalEditPO')).hide();
+            renderInputPO();
+        }
+        function hapusInputPO(id) {
+            if (!poBoleh()) return;
+            const x = (inputPO || []).find(r => String(r.id) === String(id));
+            if (!x) return;
+            if (!confirm(`Hapus Input PO untuk delivery ${x.delivery} (${x.dealer})?`)) return;
+            inputPO = inputPO.filter(r => String(r.id) !== String(id));
+            poSimpanKeStorage();
+            renderInputPO();
+        }
+
+        // ============================================================
+        // INPUT CHECKER (di samping Race, form Surat Jalan Keluar)
+        // ============================================================
+        function segarkanDaftarChecker() {
+            const dl = document.getElementById('listChecker');
+            if (!dl) return;
+            const set = new Set();
+            (transaksiData || []).forEach(x => { const n = dbText(x.checker); if (n) set.add(n); });
+            dl.innerHTML = [...set].sort((a, b) => a.localeCompare(b)).map(n => `<option value="${dbSafe(n)}"></option>`).join('');
+        }
+
         let outstandingHarian = JSON.parse(localStorage.getItem('gudang_outstanding_harian')) || {};
 
         function hitungOutstandingSistem() {
@@ -10158,6 +10512,56 @@ if (_sudahAda) {
                 navigator.serviceWorker.register('sw.js').catch(function (e) { console.warn('SW gagal didaftarkan', e); });
             });
         }
+    </script>
+    <script>
+        // ============================================================
+        // NOTIFIKASI PEMBARUAN: bila index.html di server berubah (setelah Anda upload versi baru),
+        // semua user yang sedang membuka web melihat banner "Perbarui Sekarang".
+        // Dicek lewat penanda ETag / Last-Modified file (otomatis, tanpa nomor versi manual).
+        // ============================================================
+        (function () {
+            if (location.protocol === 'file:') return;
+            var URL_CEK = location.origin + location.pathname;
+            var dasar = null, tertunda = 0, sudahTampil = false, jedaSampai = 0;
+            function tandaFile() {
+                return fetch(URL_CEK + '?_cek=' + Date.now(), { method: 'HEAD', cache: 'no-store' }).then(function (r) {
+                    if (!r.ok) return null;
+                    return (r.headers.get('etag') || '') + '|' + (r.headers.get('last-modified') || '') + '|' + (r.headers.get('content-length') || '');
+                }).catch(function () { return null; });
+            }
+            function tampilBanner() {
+                if (document.getElementById('bannerPembaruan')) return;
+                var b = document.createElement('div');
+                b.id = 'bannerPembaruan';
+                b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:20000;background:#0d6efd;color:#fff;padding:10px 16px;display:flex;gap:12px;align-items:center;justify-content:center;flex-wrap:wrap;box-shadow:0 4px 18px rgba(0,0,0,.25);font-size:.92rem;';
+                b.innerHTML = '<span><i class="fas fa-cloud-arrow-down me-2"></i><b>Pembaruan baru tersedia.</b> Unduh versi terbaru supaya fitur &amp; data tidak ada yang tertinggal.</span>' +
+                    '<button type="button" id="btnPerbarui" style="background:#fff;color:#0d6efd;border:0;border-radius:8px;padding:5px 14px;font-weight:700;">Perbarui Sekarang</button>' +
+                    '<button type="button" id="btnNanti" style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,.6);border-radius:8px;padding:5px 12px;">Nanti</button>';
+                document.body.appendChild(b);
+                document.getElementById('btnPerbarui').onclick = perbarui;
+                document.getElementById('btnNanti').onclick = function () { b.remove(); jedaSampai = Date.now() + 10 * 60000; };
+            }
+            function perbarui() {
+                if (typeof pendingKeys !== 'undefined' && pendingKeys.size) {
+                    alert('Masih ada data yang belum tersimpan ke server. Tunggu sampai banner merah hilang, lalu klik Perbarui lagi.');
+                    return;
+                }
+                var tugas = [];
+                try { if (navigator.serviceWorker) tugas.push(navigator.serviceWorker.getRegistrations().then(function (rs) { return Promise.all(rs.map(function (r) { return r.unregister(); })); })); } catch (e) {}
+                try { if (window.caches) tugas.push(caches.keys().then(function (ks) { return Promise.all(ks.map(function (k) { return caches.delete(k); })); })); } catch (e) {}
+                Promise.all(tugas).catch(function () {}).then(function () { location.reload(); });
+            }
+            function cek() {
+                if (document.hidden) return;
+                tandaFile().then(function (t) {
+                    if (!t) return;
+                    if (dasar === null) { dasar = t; return; }
+                    if (t !== dasar && Date.now() >= jedaSampai) tampilBanner();
+                });
+            }
+            window.addEventListener('load', function () { cek(); setInterval(cek, 90000); });
+            document.addEventListener('visibilitychange', function () { if (!document.hidden) cek(); });
+        })();
     </script>
 </body>
 </html>
