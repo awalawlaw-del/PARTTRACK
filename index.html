@@ -817,6 +817,11 @@
                         <i class="fas fa-file-invoice"></i><span>Input PO</span>
                     </button>
                 </li>
+                <li class="nav-item role-menu wh-access admin-only" role="presentation">
+                    <button class="nav-link w-100 text-start" data-bs-toggle="pill" data-bs-target="#menu-delivery-proses" type="button" role="tab" onclick="renderDeliveryProses()">
+                        <i class="fas fa-clipboard-check"></i><span>Delivery Diproses</span>
+                    </button>
+                </li>
                 <li class="nav-item role-menu admin-dealer report-access" role="presentation">
                     <button class="nav-link w-100 text-start" data-bs-toggle="pill" data-bs-target="#menu-laporan" type="button" role="tab" onclick="renderLaporanUlang()">
                         <i class="fas fa-file-alt"></i><span>Laporan Pengiriman</span>
@@ -1146,6 +1151,54 @@
                 </div>
 
                 <!-- 2. MENU LAPORAN PENGIRIMAN -->
+                <!-- MENU DELIVERY DIPROSES (Admin & Warehouse) -->
+                <div class="tab-pane fade" id="menu-delivery-proses" role="tabpanel">
+                    <div class="card shadow-sm border-0 mb-4 border-start border-success border-4">
+                        <div class="card-header bg-white py-3">
+                            <h5 class="mb-0 text-dark fw-bold"><i class="fas fa-clipboard-check text-success me-2"></i>Delivery Diproses Gudang</h5>
+                            <div class="small text-muted mt-1">Input Nomor Delivery yang sudah di-sign kartu / diproses gudang. Di menu Input PO, statusnya otomatis berubah jadi <b>Sudah Proses</b>.</div>
+                        </div>
+                        <div class="card-body p-4">
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label for="dp_delivery" class="form-label fw-bold small">Nomor Delivery <span class="text-danger">*</span> <span class="text-muted fw-normal">(boleh banyak)</span></label>
+                                    <textarea class="form-control" id="dp_delivery" rows="4" placeholder="Ketik/tempel banyak nomor. Pisahkan dengan Enter, koma, atau spasi." oninput="dpHitung()"></textarea>
+                                    <div class="form-text" id="dp_info">0 nomor delivery</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="dp_catatan" class="form-label fw-bold small">Catatan <span class="text-muted fw-normal">(opsional)</span></label>
+                                    <input type="text" class="form-control" id="dp_catatan" placeholder="mis. nomor kartu / nama picker" autocomplete="off">
+                                </div>
+                            </div>
+                            <div class="mt-3"><button type="button" class="btn btn-success fw-bold" onclick="simpanDeliveryProses()"><i class="fas fa-save me-1"></i> Simpan sebagai Sudah Proses</button></div>
+                        </div>
+                    </div>
+                    <div class="card shadow-sm border-0">
+                        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                            <h6 class="mb-0 fw-bold"><i class="fas fa-list me-2 text-success"></i>Daftar Delivery Diproses <span class="badge bg-success ms-1" id="dpTotalBadge">0</span></h6>
+                            <div class="input-group input-group-sm" style="max-width:320px;">
+                                <span class="input-group-text bg-light"><i class="fas fa-search"></i></span>
+                                <input type="text" class="form-control" id="dpSearch" placeholder="Cari delivery / catatan / dealer..." oninput="dpPage=1; renderDeliveryProses()">
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-bordered table-striped align-middle text-center">
+                                    <thead class="table-dark"><tr><th>No</th><th>Nomor Delivery</th><th>Catatan</th><th>Di Input PO</th><th>Diproses Oleh</th><th>Waktu</th><th>Aksi</th></tr></thead>
+                                    <tbody id="tabelDeliveryProses"></tbody>
+                                </table>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center mt-3">
+                                <span class="text-muted small" id="dpPageInfo"></span>
+                                <div class="btn-group btn-group-sm">
+                                    <button type="button" class="btn btn-outline-secondary" onclick="dpGantiHalaman(-1)"><i class="fas fa-chevron-left"></i></button>
+                                    <button type="button" class="btn btn-outline-secondary" onclick="dpGantiHalaman(1)"><i class="fas fa-chevron-right"></i></button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- MENU INPUT PO (Admin, Warehouse, Sparepart) -->
                 <div class="tab-pane fade" id="menu-input-po" role="tabpanel">
                     <div class="card shadow-sm border-0 mb-4 border-start border-primary border-4">
@@ -1181,7 +1234,8 @@
                                 </div>
                                 <div class="col-md-4">
                                     <label for="po_program" class="form-label fw-bold small">Nama Program <span class="text-danger">*</span></label>
-                                    <input type="text" class="form-control" id="po_program" list="listPOProgram" placeholder="Nama program..." autocomplete="off">
+                                    <input type="text" class="form-control" id="po_program" list="listPOProgram" placeholder="Nama program..." autocomplete="off" oninput="try { localStorage.setItem('gudang_po_program_aktif', this.value); } catch (e) {}">
+                                    <div class="form-text">Cukup diketik sekali: tetap terisi untuk input berikutnya sampai Anda menggantinya.</div>
                                     <datalist id="listPOProgram"></datalist>
                                 </div>
                             </div>
@@ -2447,6 +2501,21 @@
         </div>
     </div>
 
+    <!-- MODAL EDIT DELIVERY DIPROSES -->
+    <div class="modal fade" id="modalEditDP" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header"><h5 class="modal-title fw-bold"><i class="fas fa-edit me-2 text-warning"></i>Edit Delivery Diproses</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body">
+                    <input type="hidden" id="editDPId">
+                    <div class="mb-3"><label class="form-label fw-bold small">Nomor Delivery</label><input type="text" class="form-control" id="editDPDelivery"></div>
+                    <div class="mb-3"><label class="form-label fw-bold small">Catatan</label><input type="text" class="form-control" id="editDPCatatan" autocomplete="off"></div>
+                </div>
+                <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button><button type="button" class="btn btn-primary fw-bold" onclick="simpanEditDP()">Simpan Perubahan</button></div>
+            </div>
+        </div>
+    </div>
+
     <!-- MODAL EDIT INPUT PO -->
     <div class="modal fade" id="modalEditPO" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
@@ -2971,7 +3040,7 @@ window.demoBoot = async function () {
         'gudang_db_giso', 'gudang_db_faktur_raw', 'gudang_db_sp',
         'gudang_shipment_terinput', 'gudang_transaksi', 'gudang_pengembalian_sj',
         'gudang_total_sj', 'gudang_total_do', 'gudang_belum_kembali', 'gudang_outstanding_harian',
-        'gudang_input_po'
+        'gudang_input_po', 'gudang_delivery_proses'
     ];
     // Key yang boleh ditulis role driver (harus sama dengan policy di supabase_setup.sql)
     const DRIVER_KEYS = [
@@ -2979,7 +3048,7 @@ window.demoBoot = async function () {
         'gudang_total_sj', 'gudang_total_do', 'gudang_belum_kembali'
     ];
     // Key yang boleh ditulis role warehouse (harus sama dengan policy di supabase_warehouse.sql)
-    const WAREHOUSE_KEYS = DRIVER_KEYS.concat(['gudang_outstanding_harian', 'gudang_input_po']);
+    const WAREHOUSE_KEYS = DRIVER_KEYS.concat(['gudang_outstanding_harian', 'gudang_input_po', 'gudang_delivery_proses']);
     // Key yang boleh ditulis role sparepart (Input PO) - harus sama dengan policy di supabase_input_po.sql
     const SPAREPART_KEYS = ['gudang_input_po'];
     // Sesi login per-perangkat (tetap di localStorage, tidak dikirim ke server)
@@ -3439,7 +3508,7 @@ window.demoBoot = async function () {
         try {
             lsSet(TX_KEY, s); lastSynced[TX_KEY] = s;
             try { VAR_SETTERS[TX_KEY](arr); } catch (e) { console.warn('setter transaksi', e); }
-            ['refreshAfterDatabaseChange', 'muatTabelDriverPOD', 'muatRekapHarian', 'renderInputPO'].forEach(fn => {
+            ['refreshAfterDatabaseChange', 'muatTabelDriverPOD', 'muatRekapHarian', 'renderInputPO', 'renderDeliveryProses'].forEach(fn => {
                 try { if (typeof window[fn] === 'function') window[fn](); } catch (e) {}
             });
         } finally { applyingRemote = false; }
@@ -3727,7 +3796,8 @@ window.demoBoot = async function () {
         gudang_total_do: v => { totalDO = parseInt(v) || 0; },
         gudang_belum_kembali: v => { belumKembali = parseInt(v) || 0; },
         gudang_outstanding_harian: v => { outstandingHarian = v || {}; },
-        gudang_input_po: v => { inputPO = Array.isArray(v) ? v : []; }
+        gudang_input_po: v => { inputPO = Array.isArray(v) ? v : []; },
+        gudang_delivery_proses: v => { deliveryProses = Array.isArray(v) ? v : []; }
     };
     const antrianRefresh = new Set();
     let refreshTimer = null;
@@ -3759,7 +3829,7 @@ window.demoBoot = async function () {
                 else { const s = JSON.stringify(v); lsSet(key, s); lastSynced[key] = s; }
                 try { VAR_SETTERS[key](v); } catch (e) { console.warn('setter', key, e); }
             });
-            ['refreshAfterDatabaseChange', 'muatTabelDriverPOD', 'muatRekapHarian', 'renderInputPO'].forEach(fn => {
+            ['refreshAfterDatabaseChange', 'muatTabelDriverPOD', 'muatRekapHarian', 'renderInputPO', 'renderDeliveryProses'].forEach(fn => {
                 try { if (typeof window[fn] === 'function') window[fn](); } catch (e) {}
             });
         } finally { applyingRemote = false; }
@@ -3915,6 +3985,7 @@ window.demoBoot = async function () {
         let currentPageDBGISO = 1;
         let currentPageStatusPesanan = 1;
         let inputPO = JSON.parse(localStorage.getItem('gudang_input_po')) || [];
+        let deliveryProses = JSON.parse(localStorage.getItem('gudang_delivery_proses')) || [];
         let _spServer = { total: 0, totalAll: 0, seq: 0 };   // Status Pesanan dibaca dari tabel Supabase status_pesanan
         const rowsPerPage = 25;
 
@@ -6597,7 +6668,7 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
             }
             const { error: errSP } = await sb.from('status_pesanan').delete().gt('id', 0);
             if (errSP && !/status_pesanan|schema cache|does not exist/i.test(errSP.message || '')) { alert('Gagal menghapus Status Pesanan di server: ' + errSP.message); return; }
-            const { error: errReset } = await sb.from('app_store').delete().in('key', SHARED_KEYS.filter(k => k !== 'gudang_input_po'));
+            const { error: errReset } = await sb.from('app_store').delete().in('key', SHARED_KEYS.filter(k => k !== 'gudang_input_po' && k !== 'gudang_delivery_proses'));
             if (errReset) { alert('Gagal menghapus data di server: ' + errReset.message); return; }
             keys.forEach(k => localStorage.removeItem(k));
             location.reload();
@@ -9785,8 +9856,9 @@ if (_sudahAda) {
             try { if (document.getElementById('menu-status-pesanan').classList.contains('active')) muatDataStatusPesanan(); } catch (e) {}
         }
 
-        function resetFormInputPO() {
-            ['po_delivery', 'po_dealer', 'po_program', 'po_custno'].forEach(id => { const el = document.getElementById(id); if (el) { el.value = ''; el.dataset.auto = ''; } });
+        function resetFormInputPO(pertahankanProgram) {
+            if (!pertahankanProgram) { try { localStorage.removeItem('gudang_po_program_aktif'); } catch (e) {} }
+            ['po_delivery', 'po_dealer', 'po_custno'].concat(pertahankanProgram === true ? [] : ['po_program']).forEach(id => { const el = document.getElementById(id); if (el) { el.value = ''; el.dataset.auto = ''; } });
             document.querySelectorAll('input[name="po_jenis"]').forEach(r => { r.checked = false; });
             try { poDealerBerubah('po_dealer', 'po_custno', 'po_cust_info'); } catch (e) {}
             poHitungDelivery();
@@ -9823,7 +9895,7 @@ if (_sudahAda) {
             // yang terbaru di atas
             inputPO = baru.reverse().concat(inputPO || []);
             poSimpanKeStorage();
-            resetFormInputPO();
+            resetFormInputPO(true);   // Nama Program dipertahankan untuk input berikutnya
             poPage = 1;
             renderInputPO();
             alert(`${baru.length} nomor delivery berhasil disimpan.` + (dobel.length ? `\n\nDilewati karena sudah ada (${dobel.length}): ` + dobel.slice(0, 15).join(', ') + (dobel.length > 15 ? ' ...' : '') : ''));
@@ -9832,7 +9904,7 @@ if (_sudahAda) {
         function poDataTersaring() {
             const kw = dbKey((document.getElementById('poSearch') || {}).value || '');
             let arr = (inputPO || []).slice().sort((a, b) => (Number(b.dibuat_at) || 0) - (Number(a.dibuat_at) || 0));
-            if (poPunyaProses() && poFilterProses) arr = arr.filter(x => poFilterProses === 'sudah' ? !!x.proses : !x.proses);
+            if (poPunyaProses() && poFilterProses) arr = arr.filter(x => poFilterProses === 'sudah' ? dpPeta().has(poKunci(x.delivery)) : !dpPeta().has(poKunci(x.delivery)));
             if (!kw) return arr;
             return arr.filter(x => dbKey(x.jenis).includes(kw) || dbKey(x.delivery).includes(kw) || dbKey(x.customer_no).includes(kw) || dbKey(x.dealer).includes(kw) || dbKey(x.program).includes(kw));
         }
@@ -9841,6 +9913,11 @@ if (_sudahAda) {
             const tbody = document.getElementById('tabelInputPO');
             if (!tbody) return;
             poIsiDaftarPilihan();
+            try {
+                const pe = document.getElementById('po_program');
+                if (pe && !pe.value && !window._poProgramDipulihkan) { pe.value = localStorage.getItem('gudang_po_program_aktif') || ''; }
+                window._poProgramDipulihkan = true;
+            } catch (e) {}
             const data = poDataTersaring();
             const totalHal = Math.max(1, Math.ceil(data.length / PO_PER_HALAMAN));
             if (poPage > totalHal) poPage = totalHal;
@@ -9913,15 +9990,14 @@ if (_sudahAda) {
         // Sudah di-sign kartu / sudah diproses di gudang -> "Sudah Proses"; selain itu "Belum Proses" (OS).
         let poFilterProses = '';
         function poPunyaProses() { return currentRole === 'admin' || currentRole === 'warehouse'; }
-        function poSelProses(x, idAman) {
-            if (x.proses) {
-                const tgl = x.proses_at ? new Date(Number(x.proses_at)).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' }) : '';
-                const info = [x.proses_catatan, [x.proses_oleh, tgl].filter(Boolean).join(' • ')].filter(Boolean).map(dbSafe).join('<br>');
-                return `<span class="badge bg-success">Sudah Proses</span><div class="small text-muted">${info}</div>
-                    <button class="btn btn-sm btn-outline-secondary py-0 px-2 mt-1" onclick="poTandaiProses('${idAman}')" title="Batalkan tanda proses"><i class="fas fa-rotate-left"></i> Batal</button>`;
+        function poSelProses(x) {
+            const d = dpPeta().get(poKunci(x.delivery));
+            if (d) {
+                const tgl = d.at ? new Date(Number(d.at)).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' }) : '';
+                const info = [d.catatan, [d.oleh, tgl].filter(Boolean).join(' • ')].filter(Boolean).map(dbSafe).join('<br>');
+                return `<span class="badge bg-success">Sudah Proses</span><div class="small text-muted">${info}</div>`;
             }
-            return `<span class="badge bg-danger">Belum Proses</span><br>
-                <button class="btn btn-sm btn-outline-success py-0 px-2 mt-1" onclick="poTandaiProses('${idAman}')"><i class="fas fa-check"></i> Tandai Proses</button>`;
+            return '<span class="badge bg-danger">Belum Proses</span>';
         }
         function poTampilkanProses() {
             const boleh = poPunyaProses();
@@ -9929,28 +10005,12 @@ if (_sudahAda) {
             if (!boleh) { poFilterProses = ''; return; }
             const bar = document.getElementById('poProsesBar');
             if (!bar) return;
-            const semua = inputPO || [], sudah = semua.filter(x => x.proses).length, belum = semua.length - sudah;
+            const semua = inputPO || [], sudah = semua.filter(x => dpPeta().has(poKunci(x.delivery))).length, belum = semua.length - sudah;
             bar.innerHTML =
                 `<button type="button" class="btn btn-sm ${poFilterProses === 'belum' ? 'btn-danger' : 'btn-outline-danger'} fw-bold" onclick="poSetFilterProses('belum')">OS Belum Proses: ${belum}</button>` +
                 `<button type="button" class="btn btn-sm ${poFilterProses === 'sudah' ? 'btn-success' : 'btn-outline-success'} fw-bold" onclick="poSetFilterProses('sudah')">Sudah Proses: ${sudah}</button>`;
         }
         function poSetFilterProses(v) { poFilterProses = (poFilterProses === v) ? '' : v; poPage = 1; renderInputPO(); }
-        function poTandaiProses(id) {
-            if (!poPunyaProses()) return;
-            const x = (inputPO || []).find(r => String(r.id) === String(id));
-            if (!x) return;
-            if (x.proses) {
-                if (!confirm(`Batalkan tanda "Sudah Proses" untuk delivery ${x.delivery}?`)) return;
-                x.proses = false; x.proses_catatan = ''; x.proses_oleh = null; x.proses_at = null;
-            } else {
-                const cat = prompt(`Tandai delivery ${x.delivery} sebagai SUDAH PROSES.\nCatatan (opsional), mis. nomor kartu / nama picker:`, '');
-                if (cat === null) return;
-                x.proses = true; x.proses_catatan = dbText(cat); x.proses_oleh = currentUsername || currentRole; x.proses_at = Date.now();
-            }
-            inputPO = inputPO.slice();
-            poSimpanKeStorage();
-            renderInputPO();
-        }
         function poGantiHalaman(d) { poPage += d; renderInputPO(); }
 
         function bukaEditPO(id) {
@@ -9992,6 +10052,103 @@ if (_sudahAda) {
             inputPO = inputPO.filter(r => String(r.id) !== String(id));
             poSimpanKeStorage();
             renderInputPO();
+        }
+
+        // ============================================================
+        // DELIVERY DIPROSES GUDANG (Admin & Warehouse)
+        // Nomor Delivery yang diinput di sini otomatis berstatus "Sudah Proses" di menu Input PO.
+        // ============================================================
+        let dpPage = 1;
+        let _dpMapCache = null, _dpMapRef = null;
+        function dpBoleh() { return currentRole === 'admin' || currentRole === 'warehouse'; }
+        function dpPeta() {
+            if (_dpMapRef !== deliveryProses || !_dpMapCache) {
+                const m = new Map();
+                (deliveryProses || []).forEach(x => { const k = poKunci(x.delivery); if (k) m.set(k, x); });
+                _dpMapCache = m; _dpMapRef = deliveryProses;
+            }
+            return _dpMapCache;
+        }
+        function dpHitung() {
+            const el = document.getElementById('dp_info');
+            if (el) el.textContent = poPecahDelivery(document.getElementById('dp_delivery').value).length + ' nomor delivery';
+        }
+        function dpSimpanKeStorage() {
+            _dpMapCache = null;
+            localStorage.setItem('gudang_delivery_proses', JSON.stringify(deliveryProses));
+            try { renderInputPO(); } catch (e) {}
+        }
+        function simpanDeliveryProses() {
+            if (!dpBoleh()) { alert('Menu ini hanya untuk Admin dan Warehouse.'); return; }
+            const daftar = poPecahDelivery(document.getElementById('dp_delivery').value);
+            const catatan = dbText(document.getElementById('dp_catatan').value);
+            if (!daftar.length) { alert('Isi minimal 1 Nomor Delivery!'); document.getElementById('dp_delivery').focus(); return; }
+            const ada = dpPeta(), baru = [], dobel = [], sekarang = Date.now();
+            daftar.forEach((d, i) => {
+                if (ada.has(poKunci(d))) { dobel.push(d); return; }
+                baru.push({ id: sekarang.toString(36) + '_' + i + '_' + Math.random().toString(36).slice(2, 6), delivery: d, catatan: catatan, oleh: currentUsername || currentRole, at: sekarang + i });
+            });
+            if (!baru.length) { alert('Semua nomor delivery sudah tercatat diproses:\n' + dobel.slice(0, 15).join(', ') + (dobel.length > 15 ? ' ...' : '')); return; }
+            deliveryProses = baru.reverse().concat(deliveryProses || []);
+            dpSimpanKeStorage();
+            document.getElementById('dp_delivery').value = ''; document.getElementById('dp_catatan').value = ''; dpHitung();
+            dpPage = 1; renderDeliveryProses();
+            alert(`${baru.length} nomor delivery ditandai Sudah Proses.` + (dobel.length ? `\n\nDilewati karena sudah ada (${dobel.length}): ` + dobel.slice(0, 15).join(', ') + (dobel.length > 15 ? ' ...' : '') : ''));
+        }
+        function renderDeliveryProses() {
+            const tbody = document.getElementById('tabelDeliveryProses');
+            if (!tbody) return;
+            const kw = dbKey((document.getElementById('dpSearch') || {}).value || '');
+            const po = poPeta();
+            let arr = (deliveryProses || []).slice().sort((a, b) => (Number(b.at) || 0) - (Number(a.at) || 0));
+            if (kw) arr = arr.filter(x => { const p = po.get(poKunci(x.delivery)); return dbKey(x.delivery).includes(kw) || dbKey(x.catatan).includes(kw) || (p && (dbKey(p.dealer).includes(kw) || dbKey(p.program).includes(kw))); });
+            const totalHal = Math.max(1, Math.ceil(arr.length / PO_PER_HALAMAN));
+            if (dpPage > totalHal) dpPage = totalHal;
+            if (dpPage < 1) dpPage = 1;
+            const mulai = (dpPage - 1) * PO_PER_HALAMAN, bagian = arr.slice(mulai, mulai + PO_PER_HALAMAN);
+            const badge = document.getElementById('dpTotalBadge'); if (badge) badge.textContent = (deliveryProses || []).length;
+            tbody.innerHTML = bagian.length ? bagian.map((x, i) => {
+                const p = po.get(poKunci(x.delivery));
+                const idAman = String(x.id).replace(/'/g, '');
+                const diPO = p ? `<span class="badge ${p.jenis === 'FREEGOD' ? 'bg-success' : 'bg-primary'} me-1">${dbSafe(p.jenis || '-')}</span>${dbSafe(p.dealer)}<div class="small text-muted">${dbSafe(p.program)}</div>` : '<span class="badge bg-secondary">Belum ada di Input PO</span>';
+                const waktu = x.at ? new Date(Number(x.at)).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' }) : '-';
+                return `<tr><td>${mulai + i + 1}</td><td class="fw-bold text-primary">${dbSafe(x.delivery)}</td><td class="text-start">${dbSafe(x.catatan || '-')}</td><td class="text-start">${diPO}</td><td>${dbSafe(x.oleh || '-')}</td><td>${dbSafe(waktu)}</td>
+                    <td><button class="btn btn-sm btn-warning py-0 px-2 text-dark fw-bold mb-1 shadow-sm" onclick="bukaEditDP('${idAman}')" title="Edit"><i class="fas fa-edit"></i></button>
+                    <button class="btn btn-sm btn-danger py-0 px-2 fw-bold mb-1 shadow-sm" onclick="hapusDeliveryProses('${idAman}')" title="Hapus"><i class="fas fa-trash"></i></button></td></tr>`;
+            }).join('') : '<tr><td colspan="7" class="text-muted py-4">Belum ada delivery yang ditandai diproses.</td></tr>';
+            const info = document.getElementById('dpPageInfo');
+            if (info) info.textContent = arr.length ? `Menampilkan ${mulai + 1} - ${Math.min(mulai + PO_PER_HALAMAN, arr.length)} dari ${arr.length} data` : 'Menampilkan 0 data';
+        }
+        function dpGantiHalaman(d) { dpPage += d; renderDeliveryProses(); }
+        function bukaEditDP(id) {
+            const x = (deliveryProses || []).find(r => String(r.id) === String(id));
+            if (!x) return;
+            document.getElementById('editDPId').value = x.id;
+            document.getElementById('editDPDelivery').value = x.delivery;
+            document.getElementById('editDPCatatan').value = x.catatan || '';
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('modalEditDP')).show();
+        }
+        function simpanEditDP() {
+            if (!dpBoleh()) return;
+            const id = document.getElementById('editDPId').value;
+            const x = (deliveryProses || []).find(r => String(r.id) === String(id));
+            if (!x) return;
+            const delivery = poNormDelivery(document.getElementById('editDPDelivery').value);
+            if (!delivery) { alert('Nomor Delivery wajib diisi!'); return; }
+            if ((deliveryProses || []).some(r => String(r.id) !== String(id) && poKunci(r.delivery) === poKunci(delivery))) { alert('Nomor Delivery ' + delivery + ' sudah ada di daftar.'); return; }
+            x.delivery = delivery; x.catatan = dbText(document.getElementById('editDPCatatan').value);
+            deliveryProses = deliveryProses.slice();
+            dpSimpanKeStorage();
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('modalEditDP')).hide();
+            renderDeliveryProses();
+        }
+        function hapusDeliveryProses(id) {
+            if (!dpBoleh()) return;
+            const x = (deliveryProses || []).find(r => String(r.id) === String(id));
+            if (!x || !confirm(`Hapus ${x.delivery} dari daftar diproses? Statusnya di Input PO kembali jadi Belum Proses.`)) return;
+            deliveryProses = deliveryProses.filter(r => String(r.id) !== String(id));
+            dpSimpanKeStorage();
+            renderDeliveryProses();
         }
 
         // ============================================================
