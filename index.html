@@ -1155,6 +1155,15 @@
                         </div>
                         <div class="card-body p-4">
                             <div class="row g-3">
+                                <div class="col-12">
+                                    <label class="form-label fw-bold small d-block">Jenis <span class="text-danger">*</span></label>
+                                    <div class="btn-group" role="group" aria-label="Jenis PO">
+                                        <input type="radio" class="btn-check" name="po_jenis" id="po_jenis_fg" value="FREEGOD" autocomplete="off">
+                                        <label class="btn btn-outline-success fw-bold" for="po_jenis_fg">FREEGOD</label>
+                                        <input type="radio" class="btn-check" name="po_jenis" id="po_jenis_nfg" value="NON FREEGOD" autocomplete="off">
+                                        <label class="btn btn-outline-primary fw-bold" for="po_jenis_nfg">NON FREEGOD</label>
+                                    </div>
+                                </div>
                                 <div class="col-md-4">
                                     <label for="po_delivery" class="form-label fw-bold small">Nomor Delivery <span class="text-danger">*</span> <span class="text-muted fw-normal">(boleh banyak)</span></label>
                                     <textarea class="form-control" id="po_delivery" rows="4" placeholder="Ketik/tempel banyak nomor. Pisahkan dengan Enter, koma, atau spasi." oninput="poHitungDelivery()"></textarea>
@@ -1194,7 +1203,7 @@
                         <div class="card-body">
                             <div class="table-responsive">
                                 <table class="table table-bordered table-striped align-middle text-center">
-                                    <thead class="table-dark"><tr><th>No</th><th>Nomor Delivery</th><th>Nomor Customer</th><th>Nama Dealer</th><th>Nama Program</th><th>Diinput Oleh</th><th>Waktu Input</th><th>Aksi</th></tr></thead>
+                                    <thead class="table-dark"><tr><th>No</th><th>Jenis</th><th>Nomor Delivery</th><th>Nomor Customer</th><th>Nama Dealer</th><th>Nama Program</th><th>Status</th><th>Diinput Oleh</th><th>Waktu Input</th><th>Aksi</th></tr></thead>
                                     <tbody id="tabelInputPO"></tbody>
                                 </table>
                             </div>
@@ -2444,6 +2453,7 @@
                 <div class="modal-header"><h5 class="modal-title fw-bold"><i class="fas fa-edit me-2 text-warning"></i>Edit Input PO</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
                 <div class="modal-body">
                     <input type="hidden" id="editPOId">
+                    <div class="mb-3"><label class="form-label fw-bold small">Jenis</label><select class="form-select" id="editPOJenis"><option value="FREEGOD">FREEGOD</option><option value="NON FREEGOD">NON FREEGOD</option></select></div>
                     <div class="mb-3"><label class="form-label fw-bold small">Nomor Delivery</label><input type="text" class="form-control" id="editPODelivery"></div>
                     <div class="mb-3"><label class="form-label fw-bold small">Nama Dealer</label><input type="text" class="form-control" id="editPODealer" list="listPODealer" autocomplete="off" oninput="poDealerBerubah('editPODealer','editPOCustNo','editPOCustInfo')"></div>
                     <div class="mb-3"><label class="form-label fw-bold small">Nomor Customer</label><input type="text" class="form-control" id="editPOCustNo" autocomplete="off" oninput="this.dataset.auto=''"><div class="form-text" id="editPOCustInfo"></div></div>
@@ -9776,6 +9786,7 @@ if (_sudahAda) {
 
         function resetFormInputPO() {
             ['po_delivery', 'po_dealer', 'po_program', 'po_custno'].forEach(id => { const el = document.getElementById(id); if (el) { el.value = ''; el.dataset.auto = ''; } });
+            document.querySelectorAll('input[name="po_jenis"]').forEach(r => { r.checked = false; });
             try { poDealerBerubah('po_dealer', 'po_custno', 'po_cust_info'); } catch (e) {}
             poHitungDelivery();
         }
@@ -9785,6 +9796,9 @@ if (_sudahAda) {
             const daftar = poPecahDelivery(document.getElementById('po_delivery').value);
             const dealer = dbText(document.getElementById('po_dealer').value);
             const custNo = dbText(document.getElementById('po_custno').value);
+            const jenisEl = document.querySelector('input[name="po_jenis"]:checked');
+            const jenis = jenisEl ? jenisEl.value : '';
+            if (!jenis) { alert('Pilih Jenis: FREEGOD atau NON FREEGOD!'); return; }
             const program = dbText(document.getElementById('po_program').value);
             if (!daftar.length) { alert('Isi minimal 1 Nomor Delivery!'); document.getElementById('po_delivery').focus(); return; }
             if (!dealer) { alert('Isi Nama Dealer!'); document.getElementById('po_dealer').focus(); return; }
@@ -9797,7 +9811,7 @@ if (_sudahAda) {
                 if (ada.has(poKunci(d))) { dobel.push(d); return; }
                 baru.push({
                     id: sekarang.toString(36) + '_' + i + '_' + Math.random().toString(36).slice(2, 6),
-                    delivery: d, dealer: dealer, customer_no: custNo, program: program,
+                    jenis: jenis, delivery: d, dealer: dealer, customer_no: custNo, program: program,
                     dibuat_oleh: currentUsername || currentRole, dibuat_at: sekarang + i, diubah_at: null
                 });
             });
@@ -9818,7 +9832,7 @@ if (_sudahAda) {
             const kw = dbKey((document.getElementById('poSearch') || {}).value || '');
             const arr = (inputPO || []).slice().sort((a, b) => (Number(b.dibuat_at) || 0) - (Number(a.dibuat_at) || 0));
             if (!kw) return arr;
-            return arr.filter(x => dbKey(x.delivery).includes(kw) || dbKey(x.customer_no).includes(kw) || dbKey(x.dealer).includes(kw) || dbKey(x.program).includes(kw));
+            return arr.filter(x => dbKey(x.jenis).includes(kw) || dbKey(x.delivery).includes(kw) || dbKey(x.customer_no).includes(kw) || dbKey(x.dealer).includes(kw) || dbKey(x.program).includes(kw));
         }
 
         function renderInputPO() {
@@ -9833,17 +9847,19 @@ if (_sudahAda) {
             const bagian = data.slice(mulai, mulai + PO_PER_HALAMAN);
             const badge = document.getElementById('poTotalBadge'); if (badge) badge.textContent = (inputPO || []).length;
             if (!bagian.length) {
-                tbody.innerHTML = `<tr><td colspan="8" class="text-muted py-4">Belum ada data Input PO.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="10" class="text-muted py-4">Belum ada data Input PO.</td></tr>`;
             } else {
                 tbody.innerHTML = bagian.map((x, i) => {
                     const waktu = x.dibuat_at ? new Date(Number(x.dibuat_at)).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' }) : '-';
                     const idAman = String(x.id).replace(/'/g, '');
                     return `<tr>
                         <td>${mulai + i + 1}</td>
+                        <td>${x.jenis ? `<span class="badge ${x.jenis === 'FREEGOD' ? 'bg-success' : 'bg-primary'}">${dbSafe(x.jenis)}</span>` : '-'}</td>
                         <td class="fw-bold text-primary">${dbSafe(x.delivery)}</td>
                         <td>${dbSafe(x.customer_no || '-')}</td>
                         <td class="text-start">${dbSafe(x.dealer)}</td>
                         <td class="text-start">${dbSafe(x.program)}</td>
+                        <td id="poSt_${idAman}" class="text-nowrap"><span class="text-muted small"><i class="fas fa-spinner fa-spin me-1"></i>memuat...</span></td>
                         <td>${dbSafe(x.dibuat_oleh || '-')}</td>
                         <td>${dbSafe(waktu)}${x.diubah_at ? ' <span class="badge bg-light text-secondary border">diedit</span>' : ''}</td>
                         <td>
@@ -9852,8 +9868,42 @@ if (_sudahAda) {
                         </td></tr>`;
                 }).join('');
             }
+            poMuatStatus(bagian);
             const info = document.getElementById('poPageInfo');
             if (info) info.textContent = data.length ? `Menampilkan ${mulai + 1} - ${Math.min(mulai + PO_PER_HALAMAN, data.length)} dari ${data.length} data` : 'Menampilkan 0 data';
+        }
+        // Status tiap Nomor Delivery mengikuti menu Status Pesanan (DB Pesanan):
+        // semua barisnya "Terantar" -> Sudah Terantar; selain itu -> Belum Terantar (+ tahap terakhirnya).
+        let _poStSeq = 0;
+        const PO_URUT_STATUS = { 'Pesanan Dalam Proses': 0, 'Menunggu Pengiriman': 1, 'Dalam Pengantaran': 2, 'Terantar': 3 };
+        async function poMuatStatus(bagian) {
+            const seq = ++_poStSeq;
+            const uniq = [...new Set(bagian.map(x => poKunci(x.delivery)).filter(Boolean))];
+            const hasil = new Map();
+            let gagal = false;
+            try {
+                for (let i = 0; i < uniq.length; i += 8) {
+                    const vals = [];
+                    uniq.slice(i, i + 8).forEach(k => { vals.push(k); if (/^\d+$/.test(k) && k.length < 10) vals.push(k.padStart(10, '0')); });
+                    const { data, error } = await sb.from('status_pesanan').select('nomor_delivery,shipment_no,billing_no').in('nomor_delivery', vals);
+                    if (seq !== _poStSeq) return;
+                    if (error) { gagal = true; break; }
+                    (data || []).forEach(r => { const k = poKunci(r.nomor_delivery); if (!hasil.has(k)) hasil.set(k, []); hasil.get(k).push(r); });
+                }
+            } catch (e) { gagal = true; }
+            if (seq !== _poStSeq) return;
+            bagian.forEach(x => {
+                const el = document.getElementById('poSt_' + String(x.id).replace(/'/g, ''));
+                if (!el) return;
+                if (gagal) { el.innerHTML = '<span class="text-muted" title="Status tidak bisa dibaca dari DB Pesanan">-</span>'; return; }
+                const rows = hasil.get(poKunci(x.delivery)) || [];
+                if (!rows.length) { el.innerHTML = '<span class="badge bg-secondary">Belum</span><div class="small text-muted">Belum ada di DB Pesanan</div>'; return; }
+                let terendah = 'Terantar';
+                rows.forEach(r => { const t = getStatusPesananText(r); if ((PO_URUT_STATUS[t] ?? 0) < (PO_URUT_STATUS[terendah] ?? 0)) terendah = t; });
+                el.innerHTML = terendah === 'Terantar'
+                    ? '<span class="badge bg-success">Sudah Terantar</span>'
+                    : `<span class="badge bg-warning text-dark">Belum Terantar</span><div class="small text-muted">${dbSafe(terendah)}</div>`;
+            });
         }
         function poGantiHalaman(d) { poPage += d; renderInputPO(); }
 
@@ -9862,6 +9912,7 @@ if (_sudahAda) {
             if (!x) return;
             poIsiDaftarPilihan();
             document.getElementById('editPOId').value = x.id;
+            document.getElementById('editPOJenis').value = x.jenis || 'NON FREEGOD';
             document.getElementById('editPODelivery').value = x.delivery;
             document.getElementById('editPODealer').value = x.dealer;
             document.getElementById('editPOProgram').value = x.program;
@@ -9881,7 +9932,7 @@ if (_sudahAda) {
             if (!delivery || !dealer || !program) { alert('Nomor Delivery, Nama Dealer, dan Nama Program wajib diisi!'); return; }
             const bentrok = (inputPO || []).some(r => String(r.id) !== String(id) && poKunci(r.delivery) === poKunci(delivery));
             if (bentrok) { alert('Nomor Delivery ' + delivery + ' sudah ada di daftar Input PO.'); return; }
-            x.delivery = delivery; x.dealer = dealer; x.customer_no = custNoBaru; x.program = program; x.diubah_at = Date.now();
+            x.jenis = document.getElementById('editPOJenis').value; x.delivery = delivery; x.dealer = dealer; x.customer_no = custNoBaru; x.program = program; x.diubah_at = Date.now();
             inputPO = inputPO.slice();
             poSimpanKeStorage();
             bootstrap.Modal.getOrCreateInstance(document.getElementById('modalEditPO')).hide();
