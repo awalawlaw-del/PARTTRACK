@@ -1195,6 +1195,7 @@
                     <div class="card shadow-sm border-0">
                         <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
                             <h6 class="mb-0 fw-bold"><i class="fas fa-list me-2 text-primary"></i>Daftar Input PO <span class="badge bg-primary ms-1" id="poTotalBadge">0</span></h6>
+                            <div class="po-proses-col d-flex gap-2 flex-wrap" id="poProsesBar" style="display:none;"></div>
                             <div class="input-group input-group-sm" style="max-width:320px;">
                                 <span class="input-group-text bg-light"><i class="fas fa-search"></i></span>
                                 <input type="text" class="form-control" id="poSearch" placeholder="Cari delivery / dealer / program..." oninput="poPage=1; renderInputPO()">
@@ -1203,7 +1204,7 @@
                         <div class="card-body">
                             <div class="table-responsive">
                                 <table class="table table-bordered table-striped align-middle text-center">
-                                    <thead class="table-dark"><tr><th>No</th><th>Jenis</th><th>Nomor Delivery</th><th>Nomor Customer</th><th>Nama Dealer</th><th>Nama Program</th><th>Status</th><th>Diinput Oleh</th><th>Waktu Input</th><th>Aksi</th></tr></thead>
+                                    <thead class="table-dark"><tr><th>No</th><th>Jenis</th><th>Nomor Delivery</th><th>Nomor Customer</th><th>Nama Dealer</th><th>Nama Program</th><th>Status</th><th class="po-proses-col">Proses Gudang</th><th>Diinput Oleh</th><th>Waktu Input</th><th>Aksi</th></tr></thead>
                                     <tbody id="tabelInputPO"></tbody>
                                 </table>
                             </div>
@@ -9830,7 +9831,8 @@ if (_sudahAda) {
 
         function poDataTersaring() {
             const kw = dbKey((document.getElementById('poSearch') || {}).value || '');
-            const arr = (inputPO || []).slice().sort((a, b) => (Number(b.dibuat_at) || 0) - (Number(a.dibuat_at) || 0));
+            let arr = (inputPO || []).slice().sort((a, b) => (Number(b.dibuat_at) || 0) - (Number(a.dibuat_at) || 0));
+            if (poPunyaProses() && poFilterProses) arr = arr.filter(x => poFilterProses === 'sudah' ? !!x.proses : !x.proses);
             if (!kw) return arr;
             return arr.filter(x => dbKey(x.jenis).includes(kw) || dbKey(x.delivery).includes(kw) || dbKey(x.customer_no).includes(kw) || dbKey(x.dealer).includes(kw) || dbKey(x.program).includes(kw));
         }
@@ -9847,7 +9849,7 @@ if (_sudahAda) {
             const bagian = data.slice(mulai, mulai + PO_PER_HALAMAN);
             const badge = document.getElementById('poTotalBadge'); if (badge) badge.textContent = (inputPO || []).length;
             if (!bagian.length) {
-                tbody.innerHTML = `<tr><td colspan="10" class="text-muted py-4">Belum ada data Input PO.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="11" class="text-muted py-4">Belum ada data Input PO.</td></tr>`;
             } else {
                 tbody.innerHTML = bagian.map((x, i) => {
                     const waktu = x.dibuat_at ? new Date(Number(x.dibuat_at)).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' }) : '-';
@@ -9860,6 +9862,7 @@ if (_sudahAda) {
                         <td class="text-start">${dbSafe(x.dealer)}</td>
                         <td class="text-start">${dbSafe(x.program)}</td>
                         <td id="poSt_${idAman}" class="text-nowrap"><span class="text-muted small"><i class="fas fa-spinner fa-spin me-1"></i>memuat...</span></td>
+                        <td class="po-proses-col text-start">${poSelProses(x, idAman)}</td>
                         <td>${dbSafe(x.dibuat_oleh || '-')}</td>
                         <td>${dbSafe(waktu)}${x.diubah_at ? ' <span class="badge bg-light text-secondary border">diedit</span>' : ''}</td>
                         <td>
@@ -9868,6 +9871,7 @@ if (_sudahAda) {
                         </td></tr>`;
                 }).join('');
             }
+            poTampilkanProses();
             poMuatStatus(bagian);
             const info = document.getElementById('poPageInfo');
             if (info) info.textContent = data.length ? `Menampilkan ${mulai + 1} - ${Math.min(mulai + PO_PER_HALAMAN, data.length)} dari ${data.length} data` : 'Menampilkan 0 data';
@@ -9904,6 +9908,48 @@ if (_sudahAda) {
                     ? '<span class="badge bg-success">Sudah Terantar</span>'
                     : `<span class="badge bg-warning text-dark">Belum Terantar</span><div class="small text-muted">${dbSafe(terendah)}</div>`;
             });
+        }
+        // ---- Penanda Proses Gudang (khusus Admin & Warehouse) ----
+        // Sudah di-sign kartu / sudah diproses di gudang -> "Sudah Proses"; selain itu "Belum Proses" (OS).
+        let poFilterProses = '';
+        function poPunyaProses() { return currentRole === 'admin' || currentRole === 'warehouse'; }
+        function poSelProses(x, idAman) {
+            if (x.proses) {
+                const tgl = x.proses_at ? new Date(Number(x.proses_at)).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' }) : '';
+                const info = [x.proses_catatan, [x.proses_oleh, tgl].filter(Boolean).join(' • ')].filter(Boolean).map(dbSafe).join('<br>');
+                return `<span class="badge bg-success">Sudah Proses</span><div class="small text-muted">${info}</div>
+                    <button class="btn btn-sm btn-outline-secondary py-0 px-2 mt-1" onclick="poTandaiProses('${idAman}')" title="Batalkan tanda proses"><i class="fas fa-rotate-left"></i> Batal</button>`;
+            }
+            return `<span class="badge bg-danger">Belum Proses</span><br>
+                <button class="btn btn-sm btn-outline-success py-0 px-2 mt-1" onclick="poTandaiProses('${idAman}')"><i class="fas fa-check"></i> Tandai Proses</button>`;
+        }
+        function poTampilkanProses() {
+            const boleh = poPunyaProses();
+            document.querySelectorAll('.po-proses-col').forEach(el => { el.style.display = boleh ? '' : 'none'; });
+            if (!boleh) { poFilterProses = ''; return; }
+            const bar = document.getElementById('poProsesBar');
+            if (!bar) return;
+            const semua = inputPO || [], sudah = semua.filter(x => x.proses).length, belum = semua.length - sudah;
+            bar.innerHTML =
+                `<button type="button" class="btn btn-sm ${poFilterProses === 'belum' ? 'btn-danger' : 'btn-outline-danger'} fw-bold" onclick="poSetFilterProses('belum')">OS Belum Proses: ${belum}</button>` +
+                `<button type="button" class="btn btn-sm ${poFilterProses === 'sudah' ? 'btn-success' : 'btn-outline-success'} fw-bold" onclick="poSetFilterProses('sudah')">Sudah Proses: ${sudah}</button>`;
+        }
+        function poSetFilterProses(v) { poFilterProses = (poFilterProses === v) ? '' : v; poPage = 1; renderInputPO(); }
+        function poTandaiProses(id) {
+            if (!poPunyaProses()) return;
+            const x = (inputPO || []).find(r => String(r.id) === String(id));
+            if (!x) return;
+            if (x.proses) {
+                if (!confirm(`Batalkan tanda "Sudah Proses" untuk delivery ${x.delivery}?`)) return;
+                x.proses = false; x.proses_catatan = ''; x.proses_oleh = null; x.proses_at = null;
+            } else {
+                const cat = prompt(`Tandai delivery ${x.delivery} sebagai SUDAH PROSES.\nCatatan (opsional), mis. nomor kartu / nama picker:`, '');
+                if (cat === null) return;
+                x.proses = true; x.proses_catatan = dbText(cat); x.proses_oleh = currentUsername || currentRole; x.proses_at = Date.now();
+            }
+            inputPO = inputPO.slice();
+            poSimpanKeStorage();
+            renderInputPO();
         }
         function poGantiHalaman(d) { poPage += d; renderInputPO(); }
 
