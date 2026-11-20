@@ -1302,9 +1302,9 @@
                                     <tbody id="tabelLaporan"></tbody>
                                 </table>
                             </div>
-                            <div class="d-flex justify-content-between align-items-center mt-3">
+                            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-3" style="max-width:100%;">
                                 <span class="text-muted small" id="paginationInfoLaporan">Menampilkan 0 - 0 dari 0 data</span>
-                                <nav><ul class="pagination pagination-sm mb-0" id="paginationNavLaporan"></ul></nav>
+                                <nav style="max-width:100%;"><ul class="pagination pagination-sm mb-0 flex-wrap justify-content-center" id="paginationNavLaporan"></ul></nav>
                             </div>
                         </div>
                     </div>
@@ -7440,12 +7440,18 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
             }
             // Urut dari yang terbaru: tanggal kirim terbaru dulu, lalu waktu input terbaru.
             // (sort stabil: data tanpa waktu input tetap mengikuti urutan aslinya)
-            data = data.slice().sort((a, b) => {
-                const ta = cleanDateOnly(a.tgl_kirim_raw || a.tgl_kirim) || '';
-                const tb = cleanDateOnly(b.tgl_kirim_raw || b.tgl_kirim) || '';
-                if (ta !== tb) return ta < tb ? 1 : -1;
-                return (Number(b.dibuat_at) || 0) - (Number(a.dibuat_at) || 0);
-            });
+            const _kunciTgl = it => {
+                const d = cleanDateOnly(it.tgl_kirim_raw || it.tgl_kirim) || '';
+                const m = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(d);
+                return m ? `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}` : '';
+            };
+            data = data.map((it, i) => ({ it, i, k: _kunciTgl(it), w: Number(it.dibuat_at) || 0 }))
+                .sort((a, b) => {
+                    if (a.k !== b.k) return a.k < b.k ? 1 : -1;      // tgl kirim terbaru dulu (kosong di paling bawah)
+                    if (a.w !== b.w) return b.w - a.w;              // lalu waktu input terbaru
+                    return b.i - a.i;                               // sisanya: urutan input terakhir di atas
+                })
+                .map(x => x.it);
             return data;
         }
 
@@ -8325,8 +8331,25 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
             new bootstrap.Modal(document.getElementById('modalPreviewFoto')).show();
         }
 
+        // Daftar nomor halaman ringkas: 1 ... (cur-1) cur (cur+1) ... last
+        // Supaya navigasi tidak melebar melewati layar komputer / HP walau halamannya ratusan.
+        function buatDaftarHalaman(cur, total) {
+            const sisi = (window.innerWidth && window.innerWidth < 576) ? 0 : 1;
+            const out = [];
+            let last = 0;
+            for (let i = 1; i <= total; i++) {
+                if (i === 1 || i === total || Math.abs(i - cur) <= sisi) {
+                    if (last && i - last > 1) out.push('...');
+                    out.push(i);
+                    last = i;
+                }
+            }
+            return out;
+        }
+
         function renderPaginationLaporan(totalData) {
             let totalPages = Math.ceil(totalData / rowsPerPage) || 1;
+            if (currentPageLaporan > totalPages) currentPageLaporan = totalPages;
             let nav = document.getElementById('paginationNavLaporan');
             let info = document.getElementById('paginationInfoLaporan');
             if (!nav || !info) return;
@@ -8335,11 +8358,16 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
             let endRecord = Math.min(currentPageLaporan * rowsPerPage, totalData);
             info.innerText = `Menampilkan ${startRecord} - ${endRecord} dari ${totalData} data`;
 
-            nav.innerHTML = `<li class="page-item ${currentPageLaporan === 1 ? 'disabled' : ''}"><a class="page-link" href="#" onclick="ubahHalamanLaporan(${currentPageLaporan - 1})">Prev</a></li>`;
-            for (let i = 1; i <= totalPages; i++) {
-                nav.innerHTML += `<li class="page-item ${currentPageLaporan === i ? 'active' : ''}"><a class="page-link" href="#" onclick="ubahHalamanLaporan(${i})">${i}</a></li>`;
-            }
-            nav.innerHTML += `<li class="page-item ${currentPageLaporan === totalPages ? 'disabled' : ''}"><a class="page-link" href="#" onclick="ubahHalamanLaporan(${currentPageLaporan + 1})">Next</a></li>`;
+            let html = `<li class="page-item ${currentPageLaporan === 1 ? 'disabled' : ''}"><a class="page-link" href="#" onclick="ubahHalamanLaporan(${currentPageLaporan - 1}); return false;">Prev</a></li>`;
+            buatDaftarHalaman(currentPageLaporan, totalPages).forEach(h => {
+                if (h === '...') {
+                    html += `<li class="page-item disabled"><span class="page-link">&hellip;</span></li>`;
+                } else {
+                    html += `<li class="page-item ${currentPageLaporan === h ? 'active' : ''}"><a class="page-link" href="#" onclick="ubahHalamanLaporan(${h}); return false;">${h}</a></li>`;
+                }
+            });
+            html += `<li class="page-item ${currentPageLaporan === totalPages ? 'disabled' : ''}"><a class="page-link" href="#" onclick="ubahHalamanLaporan(${currentPageLaporan + 1}); return false;">Next</a></li>`;
+            nav.innerHTML = html;
         }
 
         function ubahHalamanLaporan(page) {
