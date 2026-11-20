@@ -7872,7 +7872,7 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
             const term = el ? el.value.trim().toLowerCase() : "";
             const from = (currentPageStatusPesanan - 1) * rowsPerPage;
 
-            let q = sb.from('status_pesanan').select('*', { count: 'exact' });
+            let q = sb.from('status_pesanan').select('*');   // TANPA count exact: hitung total dipisah agar tidak kena statement timeout
             if (term) q = spTerapkanCari(q, term);
             const fTgl = spFilterTanggalVals();
             if (fTgl.error) {
@@ -7888,6 +7888,17 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
                     res = h.error ? { error: h.error } : { data: h.rows.slice(from, from + rowsPerPage), count: h.rows.length, pesan: h.pesan };
                 } else {
                     res = await q.order('id', { ascending: true }).range(from, from + rowsPerPage - 1);
+                    // server sibuk / timeout -> coba sekali lagi sebelum menyerah
+                    if (res.error && !term && /timeout|canceling statement/i.test(res.error.message || '')) {
+                        await new Promise(r => setTimeout(r, 1200));
+                        if (seq !== _spServer.seq) return;
+                        res = await q.order('id', { ascending: true }).range(from, from + rowsPerPage - 1);
+                    }
+                    if (!res.error) {
+                        const kc = JSON.stringify([term, fTgl.vals || null]);
+                        res.count = (_spCountCache.key === kc && Date.now() - _spCountCache.waktu < 60000) ? _spCountCache.total : null;
+                        res.kc = kc;
+                    }
                 }
             } catch (e) {
                 res = { error: e };
@@ -7902,19 +7913,19 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
                 return;
             }
 
-            const total = res.count || 0;
+            const data = res.data || [];
+            const totalDiketahui = (res.count !== null && res.count !== undefined);
+            // total belum diketahui -> perkiraan sementara agar tombol Next tetap muncul bila halaman penuh
+            const total = totalDiketahui ? res.count : (from + data.length + (data.length >= rowsPerPage ? rowsPerPage : 0));
             _spServer.total = total;
-            if (!term && !fTgl.vals && currentRole !== 'salespart') {
+            if (totalDiketahui && !term && !fTgl.vals && currentRole !== 'salespart') {
                 _spServer.totalAll = total;
                 try { updateDatabaseStatusUI(); } catch (e) {}
             }
-            const totalPages = Math.ceil(total / rowsPerPage) || 1;
-            if (currentPageStatusPesanan > totalPages) {
-                currentPageStatusPesanan = totalPages;
-                if (total > 0) return muatDataStatusPesanan();
+            if (data.length === 0 && currentPageStatusPesanan > 1) {
+                currentPageStatusPesanan = 1;
+                return muatDataStatusPesanan();
             }
-
-            const data = res.data || [];
             if (data.length === 0) {
                 tbody.innerHTML = `<tr><td colspan="12" class="empty-state"><i class="fas fa-clipboard-check d-block"></i>${dbSafe(res.pesan || 'Belum ada data Status Pesanan yang di-upload atau sesuai pencarian.')}</td></tr>`;
             } else {
@@ -7946,6 +7957,34 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
             }
 
             renderPaginationStatusPesanan(total);
+
+            // hitung total sebenarnya di belakang layar (tidak menahan tampilan tabel)
+            if (!totalDiketahui && currentRole !== 'salespart') {
+                spHitungTotal(term, fTgl).then(function (n) {
+                    if (seq !== _spServer.seq || n === null) return;
+                    _spCountCache = { key: res.kc, waktu: Date.now(), total: n };
+                    _spServer.total = n;
+                    if (!term && !fTgl.vals) { _spServer.totalAll = n; try { updateDatabaseStatusUI(); } catch (e) {} }
+                    renderPaginationStatusPesanan(n);
+                });
+            }
+        }
+
+        let _spCountCache = { key: '', waktu: 0, total: 0 };
+        async function spHitungTotal(term, fTgl) {
+            const buat = function (mode) {
+                let c = sb.from('status_pesanan').select('id', { count: mode, head: true });
+                if (term) c = spTerapkanCari(c, term);
+                if (fTgl && fTgl.vals) c = c.in('creation_date', fTgl.vals);
+                return c;
+            };
+            for (const mode of ['exact', 'estimated']) {
+                try {
+                    const r = await buat(mode);
+                    if (!r.error && typeof r.count === 'number') return r.count;
+                } catch (e) {}
+            }
+            return null;
         }
 
         function renderPaginationStatusPesanan(totalData) {
