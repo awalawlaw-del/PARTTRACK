@@ -2002,7 +2002,7 @@
                             </div>
                         </div>
                         <div class="card-body p-4">
-                            <div class="small text-muted mb-3">Per <b>Tanggal Kirim</b> dan per <b>Driver</b>: jumlah surat jalan (termasuk SP), jumlah race, serta jumlah dus/koli <b>Oli</b> (kode DO), <b>Ban</b> (kode IK) dan <b>Sparepart</b> (kode lainnya, termasuk Koli &amp; SP).</div>
+                            <div class="small text-muted mb-3">Khusus <b>Driver Tetap</b>. Per <b>Tanggal Kirim</b> dan per <b>Driver</b>: jumlah surat jalan (termasuk SP), jumlah race, serta jumlah dus/koli <b>Oli</b> (kode DO), <b>Ban</b> (kode IK) dan <b>Sparepart</b> (kode lainnya, termasuk Koli &amp; SP).</div>
                             <div class="row g-3 mb-4" id="kartuKpi"></div>
                             <div class="table-responsive">
                                 <table class="table table-bordered align-middle text-center mb-0" style="min-width:900px;">
@@ -10560,7 +10560,7 @@ if (_sudahAda) {
 
         // ============================================================
         // KARTU ARMADA (per Tanggal Kirim & per Driver)
-        // Jumlah surat jalan (termasuk SP), race unik, Oli (DO), Ban (IK), Sparepart (selain itu, termasuk KOLI & SP), dan total.
+        // Hanya Driver Tetap. Jumlah surat jalan (termasuk SP), race unik, Oli (DO), Ban (IK), Sparepart (selain itu, termasuk KOLI & SP), dan total.
         // Aturan kategori & armada sama dengan Laporan Bulanan / Rekap Harian.
         // ============================================================
         let kartuCache = null;
@@ -10575,6 +10575,11 @@ if (_sudahAda) {
             transaksiUntukRole().forEach(item => {
                 const tgl = cleanDateOnly(item.tgl_kirim || item.tgl_kirim_raw);
                 if (!dalamRentang(tgl)) return;
+                // Kartu Armada hanya menampilkan Driver Tetap (terdaftar di Pengaturan Link GPS / plat terdaftar).
+                // Driver tidak tetap dan armada lain (KGP/JNE) tidak dimunculkan.
+                const arm = lapArmadaItem(item, tetap);
+                const tetapItem = arm === LAP_ARMADA[0] || !!(item.plat && namaDariPlat(item.plat));
+                if (!tetapItem) return;
                 const nama = dbText(namaDriverLaporan(item)) || '(tanpa nama)';
                 const dKey = dbKey(nama);
                 semuaDriver[dKey] = nama;
@@ -10582,17 +10587,16 @@ if (_sudahAda) {
 
                 const koli = parseInt(item.total) || 0;
                 const kat = lapKategoriKemasan(item);
-                const arm = lapArmadaItem(item, tetap);
                 const race = String(item.race === undefined || item.race === null ? '' : item.race);
 
                 if (!perTgl[tgl]) perTgl[tgl] = {};
-                const b = perTgl[tgl][dKey] || (perTgl[tgl][dKey] = { nama, armada: arm, sj: 0, race: new Set(), oli: 0, ban: 0, part: 0 });
+                const b = perTgl[tgl][dKey] || (perTgl[tgl][dKey] = { nama, armada: LAP_ARMADA[0], sj: 0, race: new Set(), oli: 0, ban: 0, part: 0 });
                 b.sj++;
                 b.race.add(race);
                 if (kat === 'Dus Oli') b.oli += koli; else if (kat === 'Dus Ban') b.ban += koli; else b.part += koli;
 
                 detail.push({
-                    'Tgl Kirim': formatDateToDisplay(item.tgl_kirim), 'Driver': nama, 'Armada': arm, 'Race': item.race || '',
+                    'Tgl Kirim': formatDateToDisplay(item.tgl_kirim), 'Driver': nama, 'Armada': LAP_ARMADA[0], 'Race': item.race || '',
                     'Shipment / SP': item.shipment, 'Dokumen': item.jenis_dokumen || 'SJ', 'Customer': item.nama_dealer || '',
                     'Jenis Kemasan': item.jenis_kemasan || '', 'Kategori': kat.replace('Dus ', ''), 'Dus / Koli': koli
                 });
@@ -10651,7 +10655,7 @@ if (_sudahAda) {
                     ${angka({ sj: d.sj, race: d.race.size, oli: d.oli, ban: d.ban, part: d.part })}</tr>`).join('');
                 return baris + `<tr class="table-active fw-bold"><td class="text-start" colspan="2">Total ${dbSafe(formatDateToDisplay(g.tgl))}</td>${angka(g.sub)}</tr>`;
             }).join('') + `<tr class="table-dark fw-bold"><td class="text-start" colspan="3">TOTAL KESELURUHAN</td>${angka(T)}</tr>`
-                : '<tr><td colspan="9" class="text-muted py-4">Tidak ada data pengiriman pada rentang tanggal ini.</td></tr>';
+                : '<tr><td colspan="9" class="text-muted py-4">Tidak ada data pengiriman Driver Tetap pada rentang tanggal ini.</td></tr>';
         }
 
         function eksporKartuArmada() {
