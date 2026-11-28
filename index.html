@@ -5874,9 +5874,10 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
             const info = "Kolom customer terbaca: No = " + (kolom.custNo || "tidak ditemukan") +
                 ", Nama = " + (kolom.custName || "tidak ditemukan") +
                 " | Kolom Creation Date = " + (kolom.creationDate || "TIDAK DITEMUKAN (cek judul kolom di file)") +
+                " | Order = " + (kolom.order || "TIDAK DITEMUKAN") + ", Delivery = " + (kolom.delivery || "TIDAK DITEMUKAN") + ", Material = " + (kolom.material || "TIDAK DITEMUKAN") + ", Description = " + (kolom.description || "TIDAK DITEMUKAN") + ", Shipment Date = " + (kolom.shipmentDate || "TIDAK DITEMUKAN") +
                 (dariDBLain ? " | dilengkapi dari DB Dealer/Shipment: " + fmt(dariDBLain) + " baris" : "") +
                 ((kosongNo || kosongNama) ? " | masih kosong: No " + fmt(kosongNo) + ", Nama " + fmt(kosongNama) + " baris" : "") +
-                ((!kolom.custNo || !kolom.custName) ? " | Sheet dibaca: \"" + (window.__spSheetName || "?") + "\" | Judul kolom di file: " + kolom.keys.slice(0, 40).join(", ") : "");
+                ((!kolom.custNo || !kolom.custName || !kolom.order || !kolom.delivery || !kolom.material) ? " | Sheet dibaca: \"" + (window.__spSheetName || "?") + "\" | Judul kolom di file: " + kolom.keys.slice(0, 40).join(", ") : "");
             setUploadStatus(type, `${fmt(total)} data baru • ${fmt(diganti)} data lama diganti • ${fmt(skipped)} dilewati • ${info}`, true);
             await muatDataStatusPesanan();
             try { updateDatabaseStatusUI(); } catch (e) {}
@@ -7951,6 +7952,19 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
             }).join("");
         }
 
+        // Urut Creation Date terbaru dulu (format dd/mm/yyyy); tanpa tanggal di paling bawah; sama -> id terbaru dulu.
+        function spKunciTgl(v) {
+            const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(String(v == null ? '' : v).trim());
+            return m ? m[3] + m[2].padStart(2, '0') + m[1].padStart(2, '0') : '';
+        }
+        function spUrutTerbaru(rows) {
+            return (rows || []).slice().sort((a, b) => {
+                const x = spKunciTgl(a.creation_date), y = spKunciTgl(b.creation_date);
+                if (x !== y) return x < y ? 1 : -1;
+                return (Number(b.id) || 0) - (Number(a.id) || 0);
+            });
+        }
+
         async function muatDataStatusPesanan() {
             const tbody = document.getElementById('tabelStatusPesanan');
             if (!tbody || typeof sb === 'undefined' || !sb) return;
@@ -7978,13 +7992,14 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
                 if (currentRole === 'salespart') {
                     const h = await spAmbilSemuaSales(term, fTgl);
                     res = h.error ? { error: h.error } : { data: h.rows.slice(from, from + rowsPerPage), count: h.rows.length, pesan: h.pesan };
+                    if (!h.error) res.data = spUrutTerbaru(h.rows).slice(from, from + rowsPerPage);
                 } else {
-                    res = await q.order('id', { ascending: true }).range(from, from + rowsPerPage - 1);
+                    res = await q.order('id', { ascending: false }).range(from, from + rowsPerPage - 1);
                     // server sibuk / timeout -> coba sekali lagi sebelum menyerah
                     if (res.error && !term && /timeout|canceling statement/i.test(res.error.message || '')) {
                         await new Promise(r => setTimeout(r, 1200));
                         if (seq !== _spServer.seq) return;
-                        res = await q.order('id', { ascending: true }).range(from, from + rowsPerPage - 1);
+                        res = await q.order('id', { ascending: false }).range(from, from + rowsPerPage - 1);
                     }
                     if (!res.error) {
                         const kc = JSON.stringify([term, fTgl.vals || null]);
@@ -8005,7 +8020,7 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
                 return;
             }
 
-            const data = res.data || [];
+            const data = spUrutTerbaru(res.data || []);
             const totalDiketahui = (res.count !== null && res.count !== undefined);
             // total belum diketahui -> perkiraan sementara agar tombol Next tetap muncul bila halaman penuh
             const total = totalDiketahui ? res.count : (from + data.length + (data.length >= rowsPerPage ? rowsPerPage : 0));
@@ -8142,7 +8157,7 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
                 }
 
                 _spTrx = null;
-                const dataExport = semua.map((row) => ({
+                const dataExport = spUrutTerbaru(semua).map((row) => ({
                     "Nomor Order": row.nomor_order,
                     "Nomor Delivery": row.nomor_delivery,
                     "Nomor Customer": noCustomerStatus(row),
