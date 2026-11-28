@@ -5536,15 +5536,16 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
             bootstrap.Modal.getOrCreateInstance(document.getElementById('modalBelumKembali')).show();
         }
 
-        function eksporDaftarSJ(list, namaSheet, prefixFile, statusText) {
+        async function eksporDaftarSJ(list, namaSheet, prefixFile, statusText) {
             if (!list.length) { alert("Tidak ada data untuk diekspor!"); return; }
+            await poIsiShipment(list.map(x => x.shipment));
             const data = list.map((x, i) => ({
                 "No": i + 1,
                 "No. Shipment / SJ": String(x.shipment || "").toUpperCase(),
                 "Dokumen": x.jenis_dokumen || "SJ",
                 "Tgl Kirim": formatDateToDisplay(x.tgl_kirim),
                 "Nomor Faktur": x.no_faktur || "",
-                "Customer": x.nama_dealer || "",
+                "Customer": poDealerShip(x.shipment, x.nama_dealer) || "",
                 "Ekspedisi": x.expedisi || "",
                 "Driver": x.driver || "",
                 "Plat": x.plat || "",
@@ -7253,15 +7254,17 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
             XLSX.writeFile(wb,`DB_GI_SO_${new Date().toISOString().split("T")[0]}.xlsx`);
         }
 
-        function eksporKeExcel() {
-            const data=getFilteredTransaksi().map((x,i)=>({
+        async function eksporKeExcel() {
+            const _lap=getFilteredTransaksi();
+            await poIsiShipment(_lap.map(x=>x.shipment));
+            const data=_lap.map((x,i)=>({
                 No:i+1,
                 "Tanggal Cetak Faktur":getTanggalFakturTerbaru(x.no_faktur)||"",
                 "Tgl Kirim":x.tgl_kirim||"",
                 "Shipment":String(x.shipment||"").toUpperCase(),
                 "Dokumen":x.jenis_dokumen||"SJ",
                 "Nomor Faktur":x.no_faktur||"",
-                "Customer":x.nama_dealer||"",
+                "Customer":poDealerShip(x.shipment,x.nama_dealer)||"",
                 "Isi Barang / Program":x.isi_barang||"",
                 "Ekspedisi":x.expedisi||"",
                 "Jenis":x.jenis_kemasan||"",
@@ -7416,7 +7419,7 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
         function transaksiUntukRole() {
             if (currentRole !== 'salespart') return transaksiData;
             const _fs = buatFilterSalesman();
-            return _fs ? transaksiData.filter(_fs) : transaksiData;
+            return _fs ? transaksiData.filter(poFilterSales(_fs)) : transaksiData;
         }
 
         function getFilteredTransaksi() {
@@ -7426,7 +7429,7 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
             }
             if (currentRole === 'salespart') {
                 const _fs = buatFilterSalesman();
-                if (_fs) data = data.filter(_fs);
+                if (_fs) data = data.filter(poFilterSales(_fs));
             }
 
             const _tglA = (document.getElementById('exportStart') || {}).value || '';
@@ -7440,6 +7443,7 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
                     String(i.no_faktur || "").toLowerCase().includes(keyword) || 
                     String(i.shipment || "").toLowerCase().includes(keyword) ||
                     String(i.nama_dealer || "").toLowerCase().includes(keyword) ||
+                    String(poDealerShip(i.shipment, "")).toLowerCase().includes(keyword) ||
                     String(i.expedisi || "").toLowerCase().includes(keyword) ||
                     String(i.isi_barang || "").toLowerCase().includes(keyword) ||
                     String(i.checker || "").toLowerCase().includes(keyword)
@@ -8091,6 +8095,7 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
             let startIndex = (currentPageLaporan - 1) * rowsPerPage;
             let endIndex = startIndex + rowsPerPage;
             let paginatedData = dataFilter.slice(startIndex, endIndex);
+            poSiapkanShipment(paginatedData.map(x => x.shipment), renderLaporanUlang);
 
             if (currentRole === 'dealer') {
                 thead.innerHTML = `
@@ -8119,7 +8124,7 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
                         <td class="text-success fw-bold">${item.no_faktur}</td>
                         <td><span class="clickable-shipment" onclick="klikShipmentLaporan('${item.shipment}')">${String(item.shipment || '').toUpperCase()}</span>${item.jenis_dokumen === 'SP' ? ' <span class="badge bg-warning text-dark">SP</span>' : ''}</td>
                         <td>${formatDateToDisplay(item.tgl_kirim)}</td>
-                        <td>${item.nama_dealer}</td>
+                        <td>${poDealerShip(item.shipment, item.nama_dealer)}</td>
                         <td>${item.expedisi}</td>
                         <td>${statusKetBadge}</td>
                         <td>${badgePOD}</td>
@@ -8179,7 +8184,7 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
                         <td>${formatDateToDisplay(item.tgl_kirim)}</td>
                         <td><span class="clickable-shipment" onclick="klikShipmentLaporan('${item.shipment}')">${String(item.shipment || '').toUpperCase()}</span>${item.jenis_dokumen === 'SP' ? ' <span class="badge bg-warning text-dark">SP</span>' : ''}</td>
                         <td class="text-success fw-bold">${item.no_faktur}</td>
-                        <td>${item.nama_dealer}</td>
+                        <td>${poDealerShip(item.shipment, item.nama_dealer)}</td>
                         <td><span class="fw-bold text-danger">${item.expedisi}</span></td>
                         <td><span class="badge bg-secondary">${item.jenis_kemasan}</span></td>
                         <td><span class="badge bg-primary">${item.total}</span></td>
@@ -8635,7 +8640,7 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
                     if (startVal && cleanCreatedOn < startVal) continue;
                     if (endVal && cleanCreatedOn > endVal) continue;
 
-                    if (_fsOut && !_fsOut({ no_customer: getDealerMasterFields(item).customerNo, nama_dealer: item.nama_customer })) continue;
+                    if (_fsOut && !_fsOut({ no_customer: poCustShip(k, getDealerMasterFields(item).customerNo), nama_dealer: poDealerShip(k, item.nama_customer) })) continue;
 
                     let leadTimeOut = 0;
                     if (cleanCreatedOn && cleanToday && cleanCreatedOn !== "undefined" && cleanCreatedOn !== "null") {
@@ -8645,24 +8650,29 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
                     }
                     item.leadTimeOut = leadTimeOut;
 
-                    if (!searchVal || item.shipment.toLowerCase().includes(searchVal) || (item.nama_customer && item.nama_customer.toLowerCase().includes(searchVal)) || (item.billing && item.billing.toLowerCase().includes(searchVal))) {
+                    if (!searchVal || item.shipment.toLowerCase().includes(searchVal) || (item.nama_customer && item.nama_customer.toLowerCase().includes(searchVal)) || String(poDealerShip(k, '')).toLowerCase().includes(searchVal) || (item.billing && item.billing.toLowerCase().includes(searchVal))) {
                         outstandingList.push(item);
                     }
                 }
             }
+            outstandingList.sort((a, b) => {   // paling lama (tgl created on terkecil) di atas; tanpa tanggal di bawah
+                const x = cleanDateOnly(a.tgl_created_on) || '9999', y = cleanDateOnly(b.tgl_created_on) || '9999';
+                return x < y ? -1 : x > y ? 1 : String(a.shipment).localeCompare(String(b.shipment), undefined, { numeric: true });
+            });
             return outstandingList;
         }
 
-        function eksporOutstanding() {
+        async function eksporOutstanding() {
             const list = getDaftarOutstanding();
             if (!list.length) { alert("Tidak ada data Outstanding untuk diekspor pada filter ini!"); return; }
+            await poIsiShipment(list.map(x => x.shipment));
             const start = document.getElementById('outStart') ? document.getElementById('outStart').value : "";
             const end = document.getElementById('outEnd') ? document.getElementById('outEnd').value : "";
             const data = list.map((d, i) => ({
                 "No": i + 1,
                 "Tanggal Created On (SJ)": formatDateToDisplay(d.tgl_created_on),
                 "Shipment (No SJ)": d.shipment,
-                "Nama Customer": d.nama_customer || "",
+                "Nama Customer": poDealerShip(d.shipment, d.nama_customer) || "",
                 "Ekspedisi": d.ekspedisi || "",
                 "Jenis": d.jenis_kemasan || "",
                 "Koli": d.jumlah_koli || 0,
@@ -8715,13 +8725,14 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
             let startIndex = (currentPageOut - 1) * rowsPerPage;
             let endIndex = startIndex + rowsPerPage;
             let paginatedData = outstandingList.slice(startIndex, endIndex);
+            poSiapkanShipment(paginatedData.map(x => x.shipment), muatDataOutstanding);
 
             paginatedData.forEach(d => {
                 tbodyOut.innerHTML += `
                     <tr>
                         <td>${formatDateToDisplay(d.tgl_created_on)}</td>
                         <td class="fw-bold text-danger">${d.shipment}</td>
-                        <td>${d.nama_customer || '-'}</td>
+                        <td>${poDealerShip(d.shipment, d.nama_customer) || '-'}</td>
                         <td>${d.jenis_kemasan || '-'}</td>
                         <td>${d.jumlah_koli || 0}</td>
                         <td class="text-success">${d.billing || '-'}</td>
@@ -9954,6 +9965,44 @@ if (_sudahAda) {
                 if (k) { const po = poPeta().get(k); if (po && dbText(po.dealer)) return po.dealer; }
             } catch (e) {}
             return (row && row.nama_customer) || '-';
+        }
+
+        // ---- Dealer dari Input PO untuk Laporan Pengiriman & Outstanding ----
+        // Penghubung: Nomor Delivery (Input PO) -> Shipment (DB Status Pesanan) -> Shipment di Laporan/Outstanding.
+        let _poShipCache = new Map(), _poShipRef = null;
+        function _poShipSegar() { if (_poShipRef !== inputPO) { _poShipCache = new Map(); _poShipRef = inputPO; } }
+        function poDealerShip(shipment, asal) { _poShipSegar(); const r = _poShipCache.get(poKunci(shipment)); return (r && r.dealer) ? r.dealer : asal; }
+        function poCustShip(shipment, asal) { _poShipSegar(); const r = _poShipCache.get(poKunci(shipment)); return (r && r.dealer && r.no) ? r.no : asal; }
+        // Filter Salesman Part memakai dealer hasil Input PO (bila sudah diketahui)
+        function poFilterSales(fs) {
+            return x => fs(Object.assign({}, x, { no_customer: poCustShip(x.shipment, x.no_customer), nama_dealer: poDealerShip(x.shipment, x.nama_dealer) }));
+        }
+        // Cari dealer PO untuk daftar shipment (hasil disimpan di cache). Mengembalikan true bila ada yang baru ketemu.
+        async function poIsiShipment(daftar) {
+            try {
+                if (typeof sb === 'undefined' || !sb || !(inputPO || []).length) return false;
+                _poShipSegar();
+                const ref = inputPO;
+                const perlu = [...new Set((daftar || []).map(poKunci).filter(k => k && !_poShipCache.has(k)))];
+                let ada = false;
+                for (let i = 0; i < perlu.length; i += 50) {
+                    const bagian = perlu.slice(i, i + 50), vals = [];
+                    bagian.forEach(k => { vals.push(k); if (/^\d+$/.test(k) && k.length < 10) vals.push(k.padStart(10, '0')); });
+                    const { data, error } = await sb.from('status_pesanan').select('nomor_delivery,shipment_no').in('shipment_no', vals);
+                    if (error || ref !== inputPO) return ada;
+                    const peta = poPeta();
+                    (data || []).forEach(r => {
+                        const po = peta.get(poKunci(r.nomor_delivery)), k = poKunci(r.shipment_no);
+                        if (po && dbText(po.dealer) && k && !(_poShipCache.get(k) || {}).dealer) { _poShipCache.set(k, { dealer: po.dealer, no: dbText(po.customer_no) }); ada = true; }
+                    });
+                    bagian.forEach(k => { if (!_poShipCache.has(k)) _poShipCache.set(k, { dealer: '', no: '' }); });
+                }
+                return ada;
+            } catch (e) { return false; }
+        }
+        function poSiapkanShipment(daftar, render) {
+            const ref = inputPO;
+            poIsiShipment(daftar).then(ada => { if (ada && ref === inputPO) render(); });
         }
 
         // Cari dealer di DB Dealer lewat nama ATAU nomor customer
