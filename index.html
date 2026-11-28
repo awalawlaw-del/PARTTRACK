@@ -1323,6 +1323,8 @@
                                     <div class="d-flex gap-2 align-items-center flex-wrap">
                                         <button class="btn btn-danger btn-sm fw-bold text-nowrap shadow-sm" onclick="hapusStatusPesananByTanggal()" title="Hapus semua pesanan dengan Creation Date dalam rentang tanggal awal s/d akhir"><i class="fas fa-trash-alt me-1"></i> Hapus per Tanggal</button>
                                         <button class="btn btn-dark btn-sm fw-bold text-nowrap shadow-sm" onclick="hapusSemuaStatusPesanan()" title="Hapus SELURUH data Status Pesanan tanpa memilih tanggal"><i class="fas fa-dumpster-fire me-1"></i> Hapus Semua</button>
+                                        <button class="btn btn-danger btn-sm fw-bold text-nowrap shadow-sm" onclick="hapusStatusPesananByPO()" title="Hapus per Nomor PO (Nomor Order/Delivery) dan tolak otomatis bila terupload lagi"><i class="fas fa-eraser me-1"></i> Hapus per No. PO</button>
+                                        <button class="btn btn-outline-dark btn-sm fw-bold text-nowrap" onclick="kelolaPODiblokir()" title="Lihat / buka blokir Nomor PO yang pernah dihapus"><i class="fas fa-ban me-1"></i> PO Diblokir</button>
                                     </div>
                                 </div>
                                 <button class="btn btn-success btn-sm fw-bold text-nowrap shadow-sm" onclick="eksporDBStatusPesanan()"><i class="fas fa-file-excel me-1"></i> Ekspor Excel</button>
@@ -3040,7 +3042,7 @@ window.demoBoot = async function () {
         'gudang_db_giso', 'gudang_db_faktur_raw', 'gudang_db_sp',
         'gudang_shipment_terinput', 'gudang_transaksi', 'gudang_pengembalian_sj',
         'gudang_total_sj', 'gudang_total_do', 'gudang_belum_kembali', 'gudang_outstanding_harian',
-        'gudang_input_po', 'gudang_delivery_proses'
+        'gudang_input_po', 'gudang_delivery_proses', 'gudang_sp_diblokir'
     ];
     // Key yang boleh ditulis role driver (harus sama dengan policy di supabase_setup.sql)
     const DRIVER_KEYS = [
@@ -3804,7 +3806,8 @@ window.demoBoot = async function () {
         gudang_belum_kembali: v => { belumKembali = parseInt(v) || 0; },
         gudang_outstanding_harian: v => { outstandingHarian = v || {}; },
         gudang_input_po: v => { inputPO = Array.isArray(v) ? v : []; },
-        gudang_delivery_proses: v => { deliveryProses = Array.isArray(v) ? v : []; }
+        gudang_delivery_proses: v => { deliveryProses = Array.isArray(v) ? v : []; },
+        gudang_sp_diblokir: v => { spDiblokir = Array.isArray(v) ? v : []; }
     };
     const antrianRefresh = new Set();
     let refreshTimer = null;
@@ -3992,6 +3995,7 @@ window.demoBoot = async function () {
         let currentPageDBGISO = 1;
         let currentPageStatusPesanan = 1;
         let inputPO = JSON.parse(localStorage.getItem('gudang_input_po')) || [];
+        let spDiblokir = JSON.parse(localStorage.getItem('gudang_sp_diblokir') || 'null') || [];   // Nomor PO yang sudah dihapus dari Status Pesanan -> upload berikutnya ditolak
         let deliveryProses = JSON.parse(localStorage.getItem('gudang_delivery_proses')) || [];
         let _spServer = { total: 0, totalAll: 0, seq: 0 };   // Status Pesanan dibaca dari tabel Supabase status_pesanan
         const rowsPerPage = 25;
@@ -5777,7 +5781,7 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
             const batchId = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
             const tanggal = getUploadedDate({ _uploadedAt: Date.now() });
             const records = [];
-            let skipped = 0, dariDBLain = 0, kosongNo = 0, kosongNama = 0;
+            let skipped = 0, dariDBLain = 0, kosongNo = 0, kosongNama = 0, ditolak = 0;
 
             rows.forEach((row, rowIndex) => {
                 const nomorOrder = val(row, kolom.order);
@@ -5818,9 +5822,15 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
                 });
             });
 
+            const _blk = spSetDiblokir();
+            if (_blk.size) {
+                for (let i = records.length - 1; i >= 0; i--) {
+                    if (_blk.has(spNoKunci(records[i].nomor_order)) || _blk.has(spNoKunci(records[i].nomor_delivery))) { records.splice(i, 1); ditolak++; }
+                }
+            }
             if (!records.length) {
-                setUploadStatus(type, "File tidak berisi data yang bisa dibaca.", false);
-                alert("File tidak berisi baris data yang bisa dibaca.");
+                setUploadStatus(type, ditolak ? `Semua ${ditolak} baris ditolak: Nomor PO sudah dihapus dan diblokir.` : "File tidak berisi data yang bisa dibaca.", false);
+                alert(ditolak ? `Semua ${ditolak} baris ditolak karena Nomor PO-nya sudah dihapus dan diblokir.` : "File tidak berisi baris data yang bisa dibaca.");
                 return;
             }
 
@@ -5874,7 +5884,8 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
                 `DB ${type} berhasil diproses!\n\n` +
                 `Data baru: ${fmt(total)}\n` +
                 `Data lama yang diganti (nomor order sama): ${fmt(diganti)}\n` +
-                `Data dilewati: ${fmt(skipped)}\n\n` + info
+                `Data dilewati: ${fmt(skipped)}\n` +
+                (ditolak ? `Ditolak (Nomor PO sudah dihapus/diblokir): ${fmt(ditolak)}\n` : '') + `\n` + info
             );
         }
 
@@ -6676,7 +6687,7 @@ shipmentTerinput = [...new Set(transaksiData.map(t => t.shipment))]; // sumber k
             }
             const { error: errSP } = await sb.from('status_pesanan').delete().gt('id', 0);
             if (errSP && !/status_pesanan|schema cache|does not exist/i.test(errSP.message || '')) { alert('Gagal menghapus Status Pesanan di server: ' + errSP.message); return; }
-            const { error: errReset } = await sb.from('app_store').delete().in('key', SHARED_KEYS.filter(k => k !== 'gudang_input_po' && k !== 'gudang_delivery_proses'));
+            const { error: errReset } = await sb.from('app_store').delete().in('key', SHARED_KEYS.filter(k => k !== 'gudang_input_po' && k !== 'gudang_delivery_proses' && k !== 'gudang_sp_diblokir'));
             if (errReset) { alert('Gagal menghapus data di server: ' + errReset.message); return; }
             keys.forEach(k => localStorage.removeItem(k));
             location.reload();
@@ -7605,22 +7616,27 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
             return _spTrx.get(shipmentVal.toLowerCase()) || null;
         }
 
+        // Dealer yang hanya punya 4 tahap (tanpa tahap Billing)
+        // Cocok bila nama dealer MEMUAT salah satu tulisan ini (huruf besar/kecil, spasi, tanda baca diabaikan),
+        // mis. "HSO H760", "PT ASTRO JAYA", "BINA-NIAGA", "SINAR PAGI (NABIRE)".
+        const SP_DEALER_KHUSUS = ['HSO', 'ASTRO', 'BINANIAGA', 'NAGOYA', 'SINARPAGINABIRE', 'SINARPAGIBIAK', 'METROMOTORNABIRE'];
+        function spDealerKhusus(row) {
+            const n = String(namaCustomerStatus(row) || row.nama_customer || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+            return SP_DEALER_KHUSUS.some(k => n.includes(k));
+        }
+
+        // Tahap: Proses Pengemasan -> (Billing, hanya dealer biasa) -> Menunggu Pengantaran -> Dalam Pengantaran -> Terantar
         function getStatusPesananText(row) {
+            const kosong = v => !v || v === "-" || v.toLowerCase() === "nan";
             const shipmentVal = dbText(row.shipment_no || row.shipment || row.no_shipment || row.no_sj);
             const billingVal = dbText(row.billing_no || row.billing || row.no_faktur || row.faktur);
 
-            const matchedTransaksi = shipmentVal ? spCariTransaksi(shipmentVal) : null;
+            const matchedTransaksi = (shipmentVal && !kosong(shipmentVal)) ? spCariTransaksi(shipmentVal) : null;
+            if (matchedTransaksi) return isDokOK(matchedTransaksi) ? "Terantar" : "Dalam Pengantaran";
 
-            if (matchedTransaksi) {
-                return isDokOK(matchedTransaksi)
-                    ? "Terantar"
-                    : "Dalam Pengantaran";
-            }
-            if (!billingVal || billingVal === "-" || billingVal.toLowerCase() === "nan") {
-                return "Pesanan Dalam Proses";
-            }
-            if (shipmentVal && billingVal) return "Menunggu Pengiriman";
-            return "Pesanan Dalam Proses";
+            if (kosong(shipmentVal)) return "Proses Pengemasan";
+            if (kosong(billingVal) && !spDealerKhusus(row)) return "Billing";
+            return "Menunggu Pengantaran";
         }
 
         // Pencarian Status Pesanan: cari langsung di kolom-kolom teks (tidak bergantung pada kolom bantu `cari`).
@@ -7698,6 +7714,70 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
             const a = document.getElementById("spHapusStart"), b = document.getElementById("spHapusEnd");
             if (a) a.value = ""; if (b) b.value = "";
             spFilterTanggalBerubah();
+        }
+
+        // ---- Hapus Status Pesanan per Nomor PO (Nomor Order ATAU Nomor Delivery) + blokir upload berikutnya ----
+        function spNoKunci(v) { return String(v == null ? '' : v).trim().toUpperCase().replace(/^0+(?=\d)/, ''); }
+        function spSetDiblokir() { return new Set((spDiblokir || []).map(x => spNoKunci(x.no)).filter(Boolean)); }
+        function spVarianNo(no) {
+            const t = String(no).trim(), k = spNoKunci(t), v = new Set([t, k]);
+            if (/^\d+$/.test(k) && k.length < 10) v.add(k.padStart(10, '0'));
+            return [...v].filter(Boolean);
+        }
+        async function hapusStatusPesananByPO() {
+            if (currentRole !== 'admin') { alert('Fitur ini hanya untuk admin.'); return; }
+            const raw = prompt('Masukkan Nomor PO (Nomor Order atau Nomor Delivery) yang akan dihapus.\nBoleh lebih dari satu, pisahkan dengan koma atau spasi:');
+            if (raw === null) return;
+            const daftar = [...new Set(String(raw).split(/[\s,;]+/).map(x => x.trim()).filter(Boolean))];
+            if (!daftar.length) return;
+            const vals = [...new Set(daftar.flatMap(spVarianNo))];
+            let total = 0;
+            try {
+                for (let i = 0; i < vals.length; i += 30) {
+                    const c = vals.slice(i, i + 30);
+                    for (const kol of ['nomor_order', 'nomor_delivery']) {
+                        const { count, error } = await sb.from('status_pesanan').select('id', { count: 'exact', head: true }).in(kol, c);
+                        if (error) throw error;
+                        total += count || 0;
+                    }
+                }
+            } catch (err) { alert('Gagal menghitung data: ' + ((err && err.message) || err)); return; }
+            if (!confirm(`Hapus ${total.toLocaleString('id-ID')} baris Status Pesanan untuk ${daftar.length} Nomor PO:\n${daftar.slice(0, 10).join(', ')}${daftar.length > 10 ? ', ...' : ''}\n\nNomor PO ini juga akan DIBLOKIR: bila muncul lagi di file upload berikutnya, barisnya otomatis ditolak.\n\nLanjutkan?`)) return;
+            let terhapus = 0;
+            try {
+                for (let i = 0; i < vals.length; i += 30) {
+                    const c = vals.slice(i, i + 30);
+                    for (const kol of ['nomor_order', 'nomor_delivery']) {
+                        const { count, error } = await sb.from('status_pesanan').delete({ count: 'exact' }).in(kol, c);
+                        if (error) throw error;
+                        terhapus += count || 0;
+                    }
+                }
+            } catch (err) {
+                alert(`Penghapusan berhenti di tengah jalan (${terhapus.toLocaleString('id-ID')} baris sudah terhapus): ` + ((err && err.message) || err));
+                currentPageStatusPesanan = 1; await muatDataStatusPesanan(); return;
+            }
+            const sudah = spSetDiblokir(), tgl = new Date().toISOString().slice(0, 10);
+            const baru = (spDiblokir || []).slice();
+            daftar.forEach(n => { const k = spNoKunci(n); if (k && !sudah.has(k)) { sudah.add(k); baru.push({ no: n, at: tgl }); } });
+            spDiblokir = baru;
+            localStorage.setItem('gudang_sp_diblokir', JSON.stringify(spDiblokir));
+            currentPageStatusPesanan = 1;
+            await muatDataStatusPesanan();
+            try { updateDatabaseStatusUI(); } catch (e) {}
+            alert(`${terhapus.toLocaleString('id-ID')} baris dihapus. ${daftar.length} Nomor PO diblokir untuk upload berikutnya.`);
+        }
+        function kelolaPODiblokir() {
+            if (currentRole !== 'admin') { alert('Fitur ini hanya untuk admin.'); return; }
+            const list = spDiblokir || [];
+            if (!list.length) { alert('Belum ada Nomor PO yang diblokir.'); return; }
+            const raw = prompt(`${list.length} Nomor PO diblokir:\n${list.slice(-60).map(x => x.no).join(', ')}${list.length > 60 ? ', ...' : ''}\n\nKetik Nomor PO yang ingin DIBUKA blokirnya (pisahkan koma/spasi), atau kosongkan untuk batal:`);
+            if (!raw || !raw.trim()) return;
+            const buka = new Set(String(raw).split(/[\s,;]+/).map(spNoKunci).filter(Boolean));
+            const sisa = list.filter(x => !buka.has(spNoKunci(x.no)));
+            spDiblokir = sisa;
+            localStorage.setItem('gudang_sp_diblokir', JSON.stringify(spDiblokir));
+            alert(`${list.length - sisa.length} Nomor PO dibuka blokirnya.`);
         }
 
         // Hapus SELURUH Status Pesanan. Dihapus per blok id supaya tidak kena batas waktu server.
@@ -7855,7 +7935,8 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
                 let badgeClass = "bg-warning text-dark";
                 if (statusText === "Terantar") badgeClass = "bg-success";
                 else if (statusText === "Dalam Pengantaran") badgeClass = "bg-primary";
-                else if (statusText === "Menunggu Pengiriman") badgeClass = "bg-info text-dark";
+                else if (statusText === "Menunggu Pengantaran") badgeClass = "bg-info text-dark";
+                else if (statusText === "Billing") badgeClass = "bg-secondary";
                 return `<tr>
                     <td>${i + 1}</td>
                     <td>${dbSafe(row.nomor_delivery || "-")}</td>
@@ -7946,7 +8027,8 @@ let keyword = document.getElementById('searchFakturSJ').value.trim().toLowerCase
                     let badgeClass = "bg-warning text-dark";
                     if (statusText === "Terantar") badgeClass = "bg-success";
                     else if (statusText === "Dalam Pengantaran") badgeClass = "bg-primary";
-                    else if (statusText === "Menunggu Pengiriman") badgeClass = "bg-info text-dark";
+                    else if (statusText === "Menunggu Pengantaran") badgeClass = "bg-info text-dark";
+                else if (statusText === "Billing") badgeClass = "bg-secondary";
 
                     return `
                         <tr>
@@ -10150,7 +10232,7 @@ if (_sudahAda) {
         // Status tiap Nomor Delivery mengikuti menu Status Pesanan (DB Pesanan):
         // semua barisnya "Terantar" -> Sudah Terantar; selain itu -> Belum Terantar (+ tahap terakhirnya).
         let _poStSeq = 0;
-        const PO_URUT_STATUS = { 'Pesanan Dalam Proses': 0, 'Menunggu Pengiriman': 1, 'Dalam Pengantaran': 2, 'Terantar': 3 };
+        const PO_URUT_STATUS = { 'Proses Pengemasan': 0, 'Billing': 1, 'Menunggu Pengantaran': 2, 'Dalam Pengantaran': 3, 'Terantar': 4 };
         async function poMuatStatus(bagian) {
             const seq = ++_poStSeq;
             const uniq = [...new Set(bagian.map(x => poKunci(x.delivery)).filter(Boolean))];
